@@ -6,38 +6,18 @@ import { Business, BusinessGenome, MatchResult } from "../types";
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Generates strategic business advice using Gemini
 export const generateBusinessAdvice = async (query: string, chatHistory: string[], language: string = 'ar'): Promise<string> => {
   try {
     const model = 'gemini-3-flash-preview';
     
     let prompt = '';
     if (language === 'ar') {
-       prompt = `
-      تاريخ المحادثة:
-      ${chatHistory.join('\n')}
-      
-      سؤال المستخدم الحالي: ${query}
-      
-      قدم إجابة مفيدة وموجزة بصفتك مستشار أعمال خبير في منصة مطورو الاعمال.
-      `;
+       prompt = `تاريخ المحادثة: ${chatHistory.join('\n')}\nسؤال المستخدم الحالي: ${query}\nقدم إجابة مفيدة وموجزة.`;
     } else if (language === 'es') {
-       prompt = `
-      Historial de chat:
-      ${chatHistory.join('\n')}
-      
-      Pregunta actual del usuario: ${query}
-      
-      Proporcione una respuesta útil y concisa como consultor de negocios experto en la plataforma Business Developers.
-      `;
+       prompt = `Historial de chat: ${chatHistory.join('\n')}\nPregunta actual: ${query}\nProporcione una respuesta concisa.`;
     } else {
-      prompt = `
-      Chat History:
-      ${chatHistory.join('\n')}
-      
-      Current User Question: ${query}
-      
-      Provide a helpful and concise answer as an expert business consultant on the Business Developers platform.
-      `;
+      prompt = `Chat History: ${chatHistory.join('\n')}\nCurrent Question: ${query}\nProvide a helpful, concise answer.`;
     }
 
     const response = await ai.models.generateContent({
@@ -56,69 +36,28 @@ export const generateBusinessAdvice = async (query: string, chatHistory: string[
   }
 };
 
-export const generateMarketingPitch = async (businessName: string, category: string, language: string = 'ar'): Promise<string> => {
-  try {
-    let prompt = '';
-    if (language === 'ar') {
-      prompt = `اكتب وصفاً تسويقياً قصيراً وجذاباً (تغريدة واحدة) لشركة اسمها "${businessName}" تعمل في مجال "${category}".`;
-    } else if (language === 'es') {
-      prompt = `Escribe una descripción de marketing corta y atractiva (un tweet) para una empresa llamada "${businessName}" en la categoría "${category}".`;
-    } else {
-      prompt = `Write a short and catchy marketing pitch (one tweet) for a company named "${businessName}" in the "${category}" industry.`;
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
-    return response.text || "";
-  } catch (error) {
-    return "Leading company in its field.";
-  }
-};
-
+// Analyzes business synergy and matches using structured JSON output
 export const generateBusinessMatches = async (myProfile: BusinessGenome, availableBusinesses: Business[], language: string = 'ar'): Promise<MatchResult[]> => {
   try {
-    const simplifiedCandidates = availableBusinesses
-        .filter(b => b.isOccupied && b.genomeProfile)
-        .map(b => ({
-           id: b.id,
-           name: b.name,
-           genome: b.genomeProfile
-        }));
+    const model = 'gemini-3-flash-preview';
+    
+    const candidates = availableBusinesses.map(b => ({
+      id: b.id,
+      name: b.name,
+      genome: b.genomeProfile
+    }));
 
     const prompt = `
-      You are the "Business Genome Matching Engine" for a digital business district.
+      Analyze business synergy between:
+      USER: ${JSON.stringify(myProfile)}
+      CANDIDATES: ${JSON.stringify(candidates)}
       
-      YOUR PROFILE (The User):
-      ${JSON.stringify(myProfile)}
-      
-      CANDIDATE ECOSYSTEM (Potential Partners):
-      ${JSON.stringify(simplifiedCandidates)}
-      
-      TASK:
-      Perform deep analysis of compatibility based on Genome Profiles.
-      Look for:
-      1. SUPPLY-DEMAND MATCH: Do they offer what you need?
-      2. SYNERGY: Could you bundle services together?
-      3. MARKET FIT: Do you target similar demographics but different products?
-
-      SCORING LOGIC:
-      - 90-100: Perfect Synergy (Direct service cross-match).
-      - 70-89: Strategic Growth Partner.
-      - 50-69: Potential Ecosystem Ally.
-
-      REQUIREMENTS:
-      1. Return TOP 6 matches.
-      2. matchReason must be insightful.
-      3. collaborationOpportunity must be a concrete business project proposal.
-      4. analysisPoints must evaluate: "Industry Sector", "Services Synergy", and "Strategic Fit".
-      
-      Output Language: ${language === 'ar' ? 'Arabic' : language === 'es' ? 'Spanish' : 'English'}
+      Return TOP 6 matches in JSON format.
+      Language: ${language}
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Upgraded for complex reasoning
+      model: model,
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -143,82 +82,118 @@ export const generateBusinessMatches = async (myProfile: BusinessGenome, availab
                 }
               }
             },
-            required: ['companyId', 'score', 'matchReason', 'collaborationOpportunity', 'sharedInterests', 'analysisPoints']
+            required: ['companyId', 'score', 'matchReason', 'collaborationOpportunity']
           }
         }
       }
     });
 
-    const text = response.text || "[]";
-    return JSON.parse(text) as MatchResult[];
-
+    return JSON.parse(response.text || "[]") as MatchResult[];
   } catch (error) {
     console.error("AI Matching Error:", error);
     return [];
   }
 };
 
+/**
+ * Uses Gemini 2.5 Maps Grounding to get real-world context for the district.
+ */
+export const getRegionalMapInsights = async (language: string = 'ar'): Promise<{text: string, links: any[]}> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: "What are the major business hubs, government buildings, and networking spots near the Digital District in Riyadh (near coordinates 24.7136, 46.6753)? Provide a professional summary.",
+      config: {
+        tools: [{ googleMaps: {} }],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: {
+              latitude: 24.7136,
+              longitude: 46.6753
+            }
+          }
+        }
+      },
+    });
+
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const links = groundingChunks
+      .filter((chunk: any) => chunk.maps?.uri)
+      .map((chunk: any) => ({
+        title: chunk.maps.title,
+        url: chunk.maps.uri
+      }));
+
+    return {
+      text: response.text || "",
+      links: links
+    };
+  } catch (error) {
+    console.error("Maps Grounding Error:", error);
+    return { text: "Location insights currently unavailable.", links: [] };
+  }
+};
+
+// Performs a smart search across business data using Gemini
 export const searchBusinessesWithAI = async (query: string, businesses: Business[], language: string = 'ar'): Promise<any> => {
   try {
     const simplifiedData = businesses.map(b => ({
       id: b.id,
       name: b.name,
-      description: b.description,
       category: b.category,
-      services: b.services,
       isOccupied: b.isOccupied
     }));
 
-    const categories = [...new Set(businesses.map(b => b.category).filter(c => c !== 'AVAILABLE'))];
-
-    const prompt = `
-      Analyze search query for Business Developers District.
-      Data: ${JSON.stringify(simplifiedData)}
-      Query: "${query}"
-      Return JSON: {"ids": [], "filters": {"status": "...", "categories": []}}
-    `;
-
+    const prompt = `Analyze search for: "${query}". Data: ${JSON.stringify(simplifiedData)}. Return JSON: {"ids": [], "filters": {"status": "all", "categories": []}}`;
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: { responseMimeType: 'application/json' }
     });
-
     return JSON.parse(response.text || "{}");
   } catch (error) {
     return { ids: [], filters: { status: 'all', categories: [] } };
   }
 };
 
-export const analyzeMapTrends = async (businesses: Business[], language: string = 'ar'): Promise<string> => {
+/**
+ * Recommends a consulting service based on user needs using Gemini.
+ * Fixes the compilation error in ConsultingPage.tsx
+ */
+export const recommendConsultingService = async (query: string, language: string = 'ar'): Promise<{recommendedId: string, reasoning: string}> => {
   try {
-    const data = businesses.filter(b => b.isOccupied).map(b => ({
-      name: b.name,
-      category: b.category,
-      visitors: b.activeVisitors || 0
-    }));
+    const model = 'gemini-3-flash-preview';
+    const categories = [
+      { id: 'cons_tech', name: 'Technical Consulting' },
+      { id: 'cons_marketing', name: 'Digital Marketing' },
+      { id: 'cons_training', name: 'Training & Development' },
+      { id: 'cons_recruitment', name: 'Recruitment' },
+      { id: 'cons_gov', name: 'Government Relations' }
+    ];
+
+    const prompt = `
+      Based on the following business challenge/goal: "${query}", 
+      recommend the best consulting category from this list: ${JSON.stringify(categories)}.
+      Explain your reasoning briefly in ${language}.
+      Return the recommendation in JSON format.
+    `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Analyze these market trends: ${JSON.stringify(data)} in ${language}.`,
-    });
-
-    return response.text || "";
-  } catch (error) {
-    return "Error generating insights.";
-  }
-};
-
-export const recommendConsultingService = async (query: string, language: string = 'ar'): Promise<any> => {
-  try {
-    const prompt = `Recommend consulting for: "${query}". Return JSON {"recommendedId": "...", "reasoning": "..."}`;
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: model,
       contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(response.text || "{}");
-  } catch (error) {
-    return { recommendedId: '', reasoning: '' };
-  }
-};
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            recommendedId: { 
+              type: Type.STRING,
+              description: 'The ID of the recommended category.'
+            },
+            reasoning: { 
+              type: Type.STRING,
+              description: 'Brief explanation for the recommendation in the user language.'
+            }
+          },
+          required: ["recommendedId", "reasoning"]
+        }
