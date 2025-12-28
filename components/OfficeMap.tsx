@@ -34,20 +34,33 @@ interface OfficeMapProps {
 
 const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredOut, lod, onSelect, onHover, t, mapMode }: any) => {
   const isHighLod = lod === 'high';
+  const isHeatmap = mapMode === 'heatmap';
   const isDarkMode = mapMode !== 'standard';
 
   const baseDepth = 40;
   // Dynamic lift calculation for 3D depth
   const liftAmount = isSelected ? 35 : isHovered ? 15 : 0;
   
+  // Heatmap Logic: Intensity based on active visitors (0-100 scale)
+  const activityIntensity = Math.min((business.activeVisitors || 0) / 100, 1);
+  
+  const getHeatmapColor = () => {
+    if (!business.isOccupied) return 'rgba(30, 41, 59, 0.4)';
+    if (activityIntensity > 0.8) return '#F7C600'; // High activity: Yellow/Gold
+    if (activityIntensity > 0.4) return '#2D89E5'; // Medium activity: Tech Blue
+    return '#1E293B'; // Low activity: Industrial Graphite
+  };
+
   const roofStyle = {
-    backgroundColor: business.isOccupied ? (isDarkMode ? '#1E293B' : '#0F172A') : '#FFFFFF',
-    border: isSelected ? '4px solid #2D89E5' : isHovered ? '2px solid #2D89E5' : '1px solid rgba(0,0,0,0.1)',
+    backgroundColor: isHeatmap ? getHeatmapColor() : (business.isOccupied ? (isDarkMode ? '#1E293B' : '#0F172A') : '#FFFFFF'),
+    border: isSelected ? '4px solid #2D89E5' : isHovered ? '2px solid #2D89E5' : isHeatmap ? `1px solid rgba(255,255,255,${activityIntensity * 0.5})` : '1px solid rgba(0,0,0,0.1)',
     boxShadow: isSelected 
       ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' 
-      : isHovered 
-        ? '0 15px 30px -10px rgba(0, 0, 0, 0.3)' 
-        : 'none',
+      : isHeatmap && business.isOccupied
+        ? `0 0 ${20 + (activityIntensity * 40)}px ${getHeatmapColor()}${Math.floor(activityIntensity * 99)}`
+        : isHovered 
+          ? '0 15px 30px -10px rgba(0, 0, 0, 0.3)' 
+          : 'none',
     opacity: isFilteredOut ? 0.2 : 1,
     transition: 'all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)'
   };
@@ -64,10 +77,22 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
       `}
       style={{ transform: `translateZ(${baseDepth + liftAmount}px)` }}
     >
+        {/* Floor Aura for Heatmap */}
+        {isHeatmap && business.isOccupied && !isFilteredOut && (
+          <div 
+            className="absolute -inset-8 rounded-full blur-2xl opacity-20 pointer-events-none transition-all duration-1000"
+            style={{ 
+              backgroundColor: getHeatmapColor(),
+              transform: 'translateZ(-20px)',
+              animation: `pulse ${3 - (activityIntensity * 2)}s infinite alternate` 
+            }}
+          />
+        )}
+
         {business.isOccupied ? (
             <div className="absolute inset-0 rounded flex flex-col items-center justify-center p-2 text-center backface-hidden z-20 transition-all duration-500" style={roofStyle}>
                 {/* Logo and Name Priority Display */}
-                {business.logoUrl && (isHighLod || isSelected) && (
+                {business.logoUrl && (isHighLod || isSelected) && !isHeatmap && (
                   <div className="flex flex-col items-center justify-center w-full h-full overflow-hidden animate-fade-in space-y-1.5">
                     <div className="bg-white p-1 rounded-lg shadow-md border border-slate-100 shrink-0">
                       <img src={business.logoUrl} alt="" className="w-10 h-10 object-contain rounded" />
@@ -77,11 +102,19 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
                     </span>
                   </div>
                 )}
+                {isHeatmap && (
+                  <div className="flex flex-col items-center justify-center">
+                    <span className={`text-sm font-black transition-colors ${activityIntensity > 0.5 ? 'text-white' : 'text-slate-400'}`}>
+                      {business.activeVisitors || 0}
+                    </span>
+                    <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Activity</span>
+                  </div>
+                )}
                 {isSelected && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-primary text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-lg z-30 ring-2 ring-white/20">Active Unit</div>}
             </div>
         ) : (
             <div className={`absolute inset-0 rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-white/20 transition-opacity ${isFilteredOut ? 'opacity-20' : 'opacity-100'}`} style={roofStyle}>
-                <span className="text-xl text-slate-300 transition-transform duration-500 group-hover:scale-125">+</span>
+                {!isHeatmap && <span className="text-xl text-slate-300 transition-transform duration-500 group-hover:scale-125">+</span>}
             </div>
         )}
     </div>
@@ -89,7 +122,6 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
 });
 
 const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFavorite, onRentClick, onAddBusiness, onUpdateBusiness }) => {
-  // Fix: Destructure 'dir' from useLanguage to resolve "Cannot find name 'dir'" errors.
   const { t, language, dir } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
@@ -194,7 +226,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
 
   return (
     <div 
-      className="w-full h-full relative overflow-hidden bg-slate-900 cursor-grab active:cursor-grabbing select-none"
+      className={`w-full h-full relative overflow-hidden transition-colors duration-1000 cursor-grab active:cursor-grabbing select-none ${mapMode === 'standard' ? 'bg-slate-900' : 'bg-brand-dark'}`}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -317,9 +349,14 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
         }}
       >
         <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800/50 border-[10px] border-slate-700/50 rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.5)]"
+          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[10px] rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.5)] transition-all duration-1000 ${mapMode === 'standard' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-900 border-indigo-900/50'}`}
           style={{ width: CONTAINER_SIZE, height: CONTAINER_SIZE }}
         >
+          {/* Tech Grid for Dark Modes */}
+          {mapMode !== 'standard' && (
+            <div className="absolute inset-0 bg-grid-tech-dark opacity-10 rounded-[30px]" />
+          )}
+
           {/* Blocks */}
           {businesses.map(business => {
             const center = getCellCenter(business.gridPosition);
