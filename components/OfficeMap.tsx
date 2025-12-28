@@ -21,6 +21,7 @@ const getCellCenter = (gridPos: {x: number, y: number}) => {
 };
 
 type MapMode = 'standard' | 'heatmap' | 'networking' | 'traffic' | 'globe';
+type SortMode = 'name_asc' | 'name_desc' | 'visitors_desc';
 
 interface OfficeMapProps {
   businesses: Business[];
@@ -102,6 +103,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'occupied' | 'available'>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('name_asc');
 
   // The specific categories requested for filtering
   const categories = ['TECHNOLOGY', 'ENGINEERING', 'TRANSPORT', 'EDUCATION', 'AVAILABLE'];
@@ -110,14 +112,22 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
   const [loadingInsights, setLoadingInsights] = useState(false);
 
   const filteredBusinesses = useMemo(() => {
-    return businesses.filter(b => {
+    let result = businesses.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = filterCategory === 'all' || b.category === filterCategory;
       const matchesStatus = filterStatus === 'all' || 
           (filterStatus === 'occupied' ? b.isOccupied : !b.isOccupied);
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [businesses, searchQuery, filterCategory, filterStatus]);
+
+    // Apply Sorting
+    return result.sort((a, b) => {
+      if (sortMode === 'name_asc') return a.name.localeCompare(b.name, language);
+      if (sortMode === 'name_desc') return b.name.localeCompare(a.name, language);
+      if (sortMode === 'visitors_desc') return (b.activeVisitors || 0) - (a.activeVisitors || 0);
+      return 0;
+    });
+  }, [businesses, searchQuery, filterCategory, filterStatus, sortMode, language]);
 
   const currentLOD = useMemo(() => viewState.zoom < 0.5 ? 'low' : viewState.zoom < 1.2 ? 'medium' : 'high', [viewState.zoom]);
 
@@ -174,6 +184,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
     setSearchQuery('');
     setFilterCategory('all');
     setFilterStatus('all');
+    setSortMode('name_asc');
   };
 
   return (
@@ -190,8 +201,8 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
        >
            {/* Enhanced Search & Control Panel */}
            <div className="absolute top-6 left-6 z-20 flex flex-col gap-4 w-80 pointer-events-none">
-               <div className="bg-white/95 backdrop-blur shadow-elevated border border-slate-200 rounded-3xl p-6 pointer-events-auto">
-                   <div className="flex items-center justify-between mb-4">
+               <div className="bg-white/95 backdrop-blur shadow-elevated border border-slate-200 rounded-3xl p-6 pointer-events-auto flex flex-col max-h-[500px]">
+                   <div className="flex items-center justify-between mb-4 shrink-0">
                       <div>
                         <h2 className="text-xl font-black text-brand-dark font-heading leading-tight">{t('businessMap')}</h2>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{filteredBusinesses.length} {t('results')}</p>
@@ -206,7 +217,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                       )}
                    </div>
                    
-                   <div className="relative mb-4 group">
+                   <div className="relative mb-4 group shrink-0">
                       <input 
                         type="text"
                         value={searchQuery}
@@ -219,8 +230,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                       </svg>
                    </div>
 
-                   <div className="grid grid-cols-2 gap-3">
-                      {/* --- CATEGORY DROPDOWN MENU --- */}
+                   <div className="grid grid-cols-2 gap-3 mb-4 shrink-0">
                       <div>
                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('categories')}</label>
                          <div className="relative">
@@ -258,9 +268,54 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                          </div>
                       </div>
                    </div>
+
+                   {/* --- SORT BY DROPDOWN --- */}
+                   <div className="mb-4 shrink-0">
+                      <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('sortBy')}</label>
+                      <div className="relative">
+                        <select 
+                            value={sortMode}
+                            onChange={(e) => setSortMode(e.target.value as SortMode)}
+                            className="w-full px-3 py-2 bg-slate-100 border-none rounded-lg text-[10px] font-bold text-slate-600 outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/10 transition-all appearance-none pr-8"
+                        >
+                            <option value="name_asc">{t('sortByName')} (A-Z)</option>
+                            <option value="name_desc">{t('sortByName')} (Z-A)</option>
+                            <option value="visitors_desc">{t('visitorNow')} (High to Low)</option>
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                        </div>
+                      </div>
+                   </div>
+
+                   {/* --- QUICK DIRECTORY LIST --- */}
+                   <div className="flex-1 overflow-y-auto custom-scrollbar-thin border-t border-slate-100 pt-4 space-y-2">
+                      <h4 className="text-[7px] font-black text-slate-300 uppercase tracking-[0.3em] mb-2 px-1">Quick Directory</h4>
+                      {filteredBusinesses.map(biz => (
+                         <button 
+                            key={biz.id}
+                            onClick={() => panToBusiness(biz)}
+                            className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all text-start group ${selectedBusinessId === biz.id ? 'bg-brand-primary/10 border border-brand-primary/20' : 'hover:bg-slate-50 border border-transparent'}`}
+                         >
+                            <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
+                               {biz.logoUrl ? <img src={biz.logoUrl} className="w-full h-full object-contain" alt="" /> : <span className="text-[10px] font-bold text-slate-300">🏢</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                               <div className="text-[10px] font-bold text-brand-dark truncate">{biz.name}</div>
+                               <div className="flex items-center justify-between">
+                                  <span className="text-[7px] font-bold text-slate-400 uppercase">{t(`cat_${biz.category}`)}</span>
+                                  {biz.isOccupied && <span className="text-[7px] font-black text-brand-primary">👥 {biz.activeVisitors || 0}</span>}
+                                </div>
+                            </div>
+                         </button>
+                      ))}
+                      {filteredBusinesses.length === 0 && (
+                         <div className="text-center py-4 text-[10px] font-bold text-slate-400 italic">No matches found</div>
+                      )}
+                   </div>
                </div>
                
-               <div className="flex gap-2 pointer-events-auto">
+               <div className="flex gap-2 pointer-events-auto shrink-0">
                   <button 
                       onClick={fetchRegionalInsights}
                       className="flex-1 flex items-center gap-3 px-4 py-3 bg-brand-accent text-brand-dark font-bold rounded-xl shadow-lg hover:scale-105 transition-all group"
