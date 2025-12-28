@@ -32,6 +32,38 @@ export async function* streamBusinessAdvice(query: string, chatHistory: string[]
 }
 
 /**
+ * Searches for businesses globally using Google Search grounding.
+ */
+export const searchOnlineBusinesses = async (query: string, language: string = 'ar'): Promise<{text: string, links: {title: string, url: string}[]}> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Perform a detailed search for businesses, industries, or market trends related to "${query}" specifically within Saudi Arabia and global industrial sectors. Summarize the key players and opportunities.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.4,
+      }
+    });
+
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const links = groundingChunks
+      .filter((chunk: any) => chunk.web?.uri)
+      .map((chunk: any) => ({
+        title: chunk.web.title || "Information Source",
+        url: chunk.web.uri
+      }));
+
+    return { 
+      text: response.text || "No specific results found.", 
+      links 
+    };
+  } catch (error) {
+    console.error("Online Search Error:", error);
+    return { text: "Online search system is currently undergoing maintenance. Please try again later.", links: [] };
+  }
+};
+
+/**
  * Generates a comprehensive, reasoned business strategy plan.
  */
 export const generateStructuredStrategy = async (profile: any, language: string = 'ar'): Promise<string> => {

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Business, MatchResult } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { getRegionalMapInsights } from '../services/geminiService';
+import { getRegionalMapInsights, searchOnlineBusinesses } from '../services/geminiService';
 import QRScanner from './QRScanner';
 
 // --- Constants for Spatial Layout ---
@@ -37,7 +37,7 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
   const isDarkMode = mapMode !== 'standard';
 
   const baseDepth = 40;
-  // Calculate dynamic lift and scale for a premium feel
+  // Dynamic lift calculation for 3D depth
   const liftAmount = isSelected ? 35 : isHovered ? 15 : 0;
   
   const roofStyle = {
@@ -57,10 +57,10 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
       onClick={(e) => { if (!isFilteredOut) { e.stopPropagation(); onSelect(business); } }}
       onMouseEnter={() => !isFilteredOut && onHover(business.id)}
       onMouseLeave={() => onHover(null)}
-      className={`relative w-full h-full preserve-3d transition-all duration-500 ease-out 
+      className={`relative w-full h-full preserve-3d transition-all duration-500 ease-out transform
         ${isFilteredOut ? 'cursor-default grayscale pointer-events-none' : 'cursor-pointer'}
-        ${isHovered ? 'scale-105' : 'scale-100'}
-        ${isSelected ? 'scale-110' : ''}
+        ${isHovered ? 'scale-105 -translate-y-1' : 'scale-100 translate-y-0'}
+        ${isSelected ? 'scale-110 -translate-y-2' : ''}
       `}
       style={{ transform: `translateZ(${baseDepth + liftAmount}px)` }}
     >
@@ -89,7 +89,8 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
 });
 
 const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFavorite, onRentClick, onAddBusiness, onUpdateBusiness }) => {
-  const { t, language } = useLanguage();
+  // Fix: Destructure 'dir' from useLanguage to resolve "Cannot find name 'dir'" errors.
+  const { t, language, dir } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -98,36 +99,33 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
   const [viewState, setViewState] = useState({ zoom: 0.8, rotateX: 55, rotateZ: 45, panX: 0, panY: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [showQRModal, setShowQRModal] = useState<string | null>(null);
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [isWebSearch, setIsWebSearch] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'occupied' | 'available'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('name_asc');
 
-  // The specific categories requested for filtering
+  // Defined Categories
   const categories = ['TECHNOLOGY', 'ENGINEERING', 'TRANSPORT', 'EDUCATION', 'AVAILABLE'];
   
   const [regionalInsights, setRegionalInsights] = useState<{text: string, links: any[]} | null>(null);
+  const [webResults, setWebResults] = useState<{text: string, links: any[]} | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
   const filteredBusinesses = useMemo(() => {
     let result = businesses.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = filterCategory === 'all' || b.category === filterCategory;
-      const matchesStatus = filterStatus === 'all' || 
-          (filterStatus === 'occupied' ? b.isOccupied : !b.isOccupied);
-      return matchesSearch && matchesCategory && matchesStatus;
+      return matchesSearch && matchesCategory;
     });
 
-    // Apply Sorting
     return result.sort((a, b) => {
       if (sortMode === 'name_asc') return a.name.localeCompare(b.name, language);
       if (sortMode === 'name_desc') return b.name.localeCompare(a.name, language);
       if (sortMode === 'visitors_desc') return (b.activeVisitors || 0) - (a.activeVisitors || 0);
       return 0;
     });
-  }, [businesses, searchQuery, filterCategory, filterStatus, sortMode, language]);
+  }, [businesses, searchQuery, filterCategory, sortMode, language]);
 
   const currentLOD = useMemo(() => viewState.zoom < 0.5 ? 'low' : viewState.zoom < 1.2 ? 'medium' : 'high', [viewState.zoom]);
 
@@ -156,6 +154,20 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
     setLoadingInsights(false);
   };
 
+  const performWebSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setLoadingInsights(true);
+    const res = await searchOnlineBusinesses(searchQuery, language);
+    setWebResults(res);
+    setLoadingInsights(false);
+  };
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setFilterCategory('all');
+    setSortMode('name_asc');
+  };
+
   const panToBusiness = (business: Business) => {
     const center = getCellCenter(business.gridPosition);
     setSelectedBusinessId(business.id);
@@ -178,335 +190,281 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
     }
   };
 
-  const selectedBusiness = businesses.find(b => b.id === selectedBusinessId) || null;
-
-  const resetAllFilters = () => {
-    setSearchQuery('');
-    setFilterCategory('all');
-    setFilterStatus('all');
-    setSortMode('name_asc');
-  };
+  const selectedBusiness = businesses.find(b => b.id === selectedBusinessId);
 
   return (
-    <div className="flex flex-col lg:flex-row h-full gap-6 w-full relative">
-       <div 
-          className={`relative flex-1 h-[600px] lg:h-full overflow-hidden rounded-[32px] border shadow-inner transition-colors duration-700 ${
-              mapMode === 'standard' ? 'bg-[#F1F5F9]' : 'bg-[#0B1121]'
-          }`}
-          onMouseDown={handleMouseDown} 
-          onMouseMove={handleMouseMove} 
-          onMouseUp={() => setIsDragging(false)} 
-          onMouseLeave={() => setIsDragging(false)}
-          onWheel={handleWheel}
-       >
-           {/* Enhanced Search & Control Panel */}
-           <div className="absolute top-6 left-6 z-20 flex flex-col gap-4 w-80 pointer-events-none">
-               <div className="bg-white/95 backdrop-blur shadow-elevated border border-slate-200 rounded-3xl p-6 pointer-events-auto flex flex-col max-h-[500px]">
-                   <div className="flex items-center justify-between mb-4 shrink-0">
-                      <div>
-                        <h2 className="text-xl font-black text-brand-dark font-heading leading-tight">{t('businessMap')}</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{filteredBusinesses.length} {t('results')}</p>
-                      </div>
-                      {(searchQuery || filterCategory !== 'all' || filterStatus !== 'all') && (
-                        <button 
-                          onClick={resetAllFilters}
-                          className="text-[10px] font-black text-brand-primary hover:underline uppercase"
-                        >
-                          {t('resetFilters')}
-                        </button>
+    <div 
+      className="w-full h-full relative overflow-hidden bg-slate-900 cursor-grab active:cursor-grabbing select-none"
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={() => setIsDragging(false)}
+      onMouseLeave={() => setIsDragging(false)}
+    >
+      {/* HUD & Controls */}
+      <div className="absolute top-6 left-6 z-40 flex flex-col gap-4 w-72">
+        <div className="bg-white/10 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-2xl">
+           <div className="flex gap-2 mb-3">
+              <button 
+                 onClick={() => setIsWebSearch(false)}
+                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!isWebSearch ? 'bg-brand-primary text-white shadow-lg' : 'bg-white/5 text-white/50 hover:text-white'}`}
+              >
+                 District
+              </button>
+              <button 
+                 onClick={() => setIsWebSearch(true)}
+                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isWebSearch ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/50 hover:text-white'}`}
+              >
+                 Global
+              </button>
+           </div>
+
+           <div className="relative">
+              <input 
+                 type="text" 
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 onKeyDown={(e) => e.key === 'Enter' && isWebSearch && performWebSearch()}
+                 placeholder={isWebSearch ? t('searchPlaceholderWeb') : t('searchPlaceholder')}
+                 className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-brand-primary ${isWebSearch ? 'pr-12' : ''}`}
+              />
+              {isWebSearch && (
+                 <button 
+                    onClick={performWebSearch}
+                    disabled={loadingInsights}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-lg hover:brightness-110 disabled:opacity-50"
+                 >
+                    {loadingInsights ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : "🔍"}
+                 </button>
+              )}
+           </div>
+
+           {!isWebSearch && (
+              <div className="grid grid-cols-1 gap-2 mt-3 animate-fade-in">
+                 <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-center px-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('categories')}</label>
+                      {filterCategory !== 'all' && (
+                        <button onClick={() => setFilterCategory('all')} className="text-[9px] font-black text-brand-primary uppercase hover:underline">Reset</button>
                       )}
-                   </div>
-                   
-                   <div className="relative mb-4 group shrink-0">
-                      <input 
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={t('searchPlaceholder')}
-                        className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-brand-dark outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all shadow-inner"
-                      />
-                      <svg className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400 group-focus-within:text-brand-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                   </div>
+                    </div>
+                    <select 
+                       value={filterCategory}
+                       onChange={(e) => setFilterCategory(e.target.value)}
+                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none cursor-pointer hover:bg-white/10 appearance-none shadow-inner"
+                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: dir === 'rtl' ? 'left 0.5rem center' : 'right 0.5rem center', backgroundSize: '1em' }}
+                    >
+                       <option value="all" className="bg-slate-800 text-white">{t('allCategories')}</option>
+                       {categories.map(c => <option key={c} value={c} className="bg-slate-800 text-white">{t(`cat_${c}`)}</option>)}
+                    </select>
+                 </div>
 
-                   <div className="grid grid-cols-2 gap-3 mb-4 shrink-0">
-                      <div>
-                         <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('categories')}</label>
-                         <div className="relative">
-                            <select 
-                                value={filterCategory}
-                                onChange={(e) => setFilterCategory(e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-100 border-none rounded-lg text-[10px] font-bold text-slate-600 outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/10 transition-all appearance-none pr-8"
-                            >
-                                <option value="all">{t('allCategories')}</option>
-                                {categories.map(cat => (
-                                   <option key={cat} value={cat}>{t(`cat_${cat}`)}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                            </div>
-                         </div>
-                      </div>
-                      
-                      <div>
-                         <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('status')}</label>
-                         <div className="relative">
-                            <select 
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value as any)}
-                                className="w-full px-3 py-2 bg-slate-100 border-none rounded-lg text-[10px] font-bold text-slate-600 outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/10 transition-all appearance-none pr-8"
-                            >
-                                <option value="all">{t('allStatuses')}</option>
-                                <option value="occupied">{t('occupied')}</option>
-                                <option value="available">{t('available')}</option>
-                            </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                            </div>
-                         </div>
-                      </div>
-                   </div>
+                 <div className="flex flex-col gap-1 mt-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">{t('sortBy')}</label>
+                    <select 
+                       value={sortMode}
+                       onChange={(e) => setSortMode(e.target.value as SortMode)}
+                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none cursor-pointer hover:bg-white/10 appearance-none shadow-inner"
+                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: dir === 'rtl' ? 'left 0.5rem center' : 'right 0.5rem center', backgroundSize: '1em' }}
+                    >
+                       <option value="name_asc" className="bg-slate-800 text-white">{t('sortNameAsc')}</option>
+                       <option value="name_desc" className="bg-slate-800 text-white">{t('sortNameDesc')}</option>
+                       <option value="visitors_desc" className="bg-slate-800 text-white">{t('sortVisitors')}</option>
+                    </select>
+                 </div>
 
-                   {/* --- SORT BY DROPDOWN --- */}
-                   <div className="mb-4 shrink-0">
-                      <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('sortBy')}</label>
-                      <div className="relative">
-                        <select 
-                            value={sortMode}
-                            onChange={(e) => setSortMode(e.target.value as SortMode)}
-                            className="w-full px-3 py-2 bg-slate-100 border-none rounded-lg text-[10px] font-bold text-slate-600 outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/10 transition-all appearance-none pr-8"
-                        >
-                            <option value="name_asc">{t('sortByName')} (A-Z)</option>
-                            <option value="name_desc">{t('sortByName')} (Z-A)</option>
-                            <option value="visitors_desc">{t('visitorNow')} (High to Low)</option>
-                        </select>
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                        </div>
-                      </div>
-                   </div>
+                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{filteredBusinesses.length} {t('results')}</span>
+                    {(searchQuery || filterCategory !== 'all') && (
+                       <button onClick={handleResetFilters} className="text-[10px] font-black text-slate-400 hover:text-white uppercase tracking-widest transition-colors">Clear All</button>
+                    )}
+                 </div>
+              </div>
+           )}
+        </div>
 
-                   {/* --- QUICK DIRECTORY LIST --- */}
-                   <div className="flex-1 overflow-y-auto custom-scrollbar-thin border-t border-slate-100 pt-4 space-y-2">
-                      <h4 className="text-[7px] font-black text-slate-300 uppercase tracking-[0.3em] mb-2 px-1">Quick Directory</h4>
-                      {filteredBusinesses.map(biz => (
-                         <button 
-                            key={biz.id}
-                            onClick={() => panToBusiness(biz)}
-                            className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all text-start group ${selectedBusinessId === biz.id ? 'bg-brand-primary/10 border border-brand-primary/20' : 'hover:bg-slate-50 border border-transparent'}`}
-                         >
-                            <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
-                               {biz.logoUrl ? <img src={biz.logoUrl} className="w-full h-full object-contain" alt="" /> : <span className="text-[10px] font-bold text-slate-300">🏢</span>}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                               <div className="text-[10px] font-bold text-brand-dark truncate">{biz.name}</div>
-                               <div className="flex items-center justify-between">
-                                  <span className="text-[7px] font-bold text-slate-400 uppercase">{t(`cat_${biz.category}`)}</span>
-                                  {biz.isOccupied && <span className="text-[7px] font-black text-brand-primary">👥 {biz.activeVisitors || 0}</span>}
-                                </div>
-                            </div>
-                         </button>
-                      ))}
-                      {filteredBusinesses.length === 0 && (
-                         <div className="text-center py-4 text-[10px] font-bold text-slate-400 italic">No matches found</div>
-                      )}
-                   </div>
+        <div className="flex gap-2">
+           <button onClick={() => setViewState({ zoom: 0.8, rotateX: 55, rotateZ: 45, panX: 0, panY: 0 })} className="flex-1 bg-white/10 backdrop-blur-md border border-white/10 py-2 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest hover:bg-white/20">Reset View</button>
+           <button onClick={() => setIsScannerOpen(true)} className="flex-1 bg-brand-primary py-2 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest hover:brightness-110">Scan QR</button>
+        </div>
+      </div>
+
+      {/* Mode Switcher */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/10 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex gap-1 shadow-2xl">
+         {(['standard', 'heatmap', 'globe'] as MapMode[]).map(mode => (
+           <button 
+             key={mode} 
+             onClick={() => mode === 'globe' ? fetchRegionalInsights() : setMapMode(mode)}
+             className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${mapMode === mode ? 'bg-brand-primary text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+           >
+             {mode}
+           </button>
+         ))}
+      </div>
+
+      {/* 3D Map Viewport */}
+      <div 
+        className="absolute inset-0 preserve-3d transition-transform duration-700 ease-out pointer-events-none"
+        style={{
+          transform: `
+            perspective(1200px) 
+            translateX(${viewState.panX}px) 
+            translateY(${viewState.panY}px) 
+            rotateX(${viewState.rotateX}deg) 
+            rotateZ(${viewState.rotateZ}deg) 
+            scale(${viewState.zoom})
+          `
+        }}
+      >
+        <div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800/50 border-[10px] border-slate-700/50 rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.5)]"
+          style={{ width: CONTAINER_SIZE, height: CONTAINER_SIZE }}
+        >
+          {/* Blocks */}
+          {businesses.map(business => {
+            const center = getCellCenter(business.gridPosition);
+            const isSelected = selectedBusinessId === business.id;
+            const isHovered = hoveredId === business.id;
+            const isFilteredOut = !filteredBusinesses.find(b => b.id === business.id);
+
+            return (
+              <div 
+                key={business.id}
+                className="absolute pointer-events-auto"
+                style={{
+                  width: CELL_SIZE,
+                  height: CELL_SIZE,
+                  left: center.x - CELL_SIZE/2,
+                  top: center.y - CELL_SIZE/2,
+                }}
+              >
+                <BuildingBlock 
+                  business={business}
+                  isHovered={isHovered}
+                  isSelected={isSelected}
+                  isFilteredOut={isFilteredOut}
+                  lod={currentLOD}
+                  onSelect={panToBusiness}
+                  onHover={setHoveredId}
+                  t={t}
+                  mapMode={mapMode}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {isScannerOpen && <QRScanner onScan={handleQRScan} onClose={() => setIsScannerOpen(false)} />}
+
+      {isSidebarOpen && selectedBusiness && (
+         <div className="absolute top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 animate-slide-left flex flex-col">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+               <h3 className="text-xl font-black text-brand-dark uppercase tracking-tight">{selectedBusiness.name}</h3>
+               <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors text-2xl">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+               <div className="flex flex-col items-center mb-8">
+                  <div className="w-24 h-24 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-4 shadow-sm">
+                     {selectedBusiness.logoUrl ? <img src={selectedBusiness.logoUrl} alt="" className="w-16 h-16 object-contain" /> : <span className="text-4xl">🏢</span>}
+                  </div>
+                  <span className="px-3 py-1 bg-brand-primary/10 text-brand-primary rounded-full text-[10px] font-black uppercase tracking-widest">{selectedBusiness.category}</span>
                </div>
                
-               <div className="flex gap-2 pointer-events-auto shrink-0">
-                  <button 
-                      onClick={fetchRegionalInsights}
-                      className="flex-1 flex items-center gap-3 px-4 py-3 bg-brand-accent text-brand-dark font-bold rounded-xl shadow-lg hover:scale-105 transition-all group"
-                  >
-                      <span className="text-lg">🌍</span>
-                      <div className="text-start">
-                        <div className="text-[10px] leading-none">Insights</div>
-                        <div className="text-[7px] opacity-60 uppercase">Grounding</div>
-                      </div>
-                  </button>
-
-                  <button 
-                      onClick={() => setIsScannerOpen(true)}
-                      className="px-5 py-3 bg-brand-primary text-white font-bold rounded-xl shadow-lg hover:scale-105 transition-all group border border-white/10 flex items-center gap-2"
-                      title={t('scanQR')}
-                  >
-                      <span className="text-lg">📷</span>
-                      <span className="text-[10px] uppercase font-black hidden sm:inline tracking-tighter">Lens</span>
-                  </button>
+               <div className="space-y-6">
+                  <section>
+                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('aboutCompany')}</h4>
+                     <p className="text-sm text-slate-600 leading-relaxed">{selectedBusiness.description}</p>
+                  </section>
+                  
+                  {selectedBusiness.isOccupied ? (
+                    <>
+                      <section>
+                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('servicesOffered')}</h4>
+                         <div className="flex flex-wrap gap-2">
+                            {selectedBusiness.services?.map(s => <span key={s} className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold">{s}</span>)}
+                         </div>
+                      </section>
+                      <button className="w-full py-4 bg-brand-primary text-white rounded-2xl font-bold shadow-lg hover:brightness-110 transition-all">{t('contact')}</button>
+                    </>
+                  ) : (
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-center">
+                       <p className="text-sm text-slate-500 mb-6">{t('spaceAvailable')}</p>
+                       <button onClick={() => onRentClick(selectedBusiness)} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg hover:bg-emerald-700 transition-all">{t('rentThisOffice')}</button>
+                    </div>
+                  )}
                </div>
-           </div>
+            </div>
+         </div>
+      )}
 
-           {/* Mode Selectors */}
-           <div className="absolute top-6 right-6 z-20 flex flex-col gap-2 p-2 bg-white/90 backdrop-blur rounded-2xl shadow-card">
-              {['standard', 'heatmap', 'networking', 'traffic'].map(mode => (
-                  <button
-                      key={mode}
-                      onClick={() => {setMapMode(mode as MapMode); setRegionalInsights(null);}}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${mapMode === mode ? 'bg-brand-primary text-white' : 'text-slate-400 hover:bg-slate-100'}`}
-                  >
-                      {mode === 'standard' ? '🏙️' : mode === 'heatmap' ? '🔥' : mode === 'networking' ? '🕸️' : '🚗'}
-                  </button>
+      {/* Regional Insights Modal */}
+      {mapMode === 'globe' && regionalInsights && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white/95 backdrop-blur-xl rounded-[40px] shadow-2xl p-10 z-[60] animate-scale-in border border-white/20">
+           <div className="flex justify-between items-center mb-8">
+              <h3 className="text-3xl font-black text-brand-dark uppercase tracking-tighter flex items-center gap-3">
+                 <span className="w-2 h-8 bg-brand-primary rounded-full"></span>
+                 Regional AI Insights
+              </h3>
+              <button onClick={() => setMapMode('standard')} className="text-slate-400 hover:text-slate-900 transition-colors">✕</button>
+           </div>
+           <p className="text-lg text-slate-600 leading-relaxed mb-8">{regionalInsights.text}</p>
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {regionalInsights.links.map((link, i) => (
+                <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between group hover:border-brand-primary transition-all">
+                   <span className="font-bold text-slate-800 truncate">{link.title}</span>
+                   <span className="text-brand-primary group-hover:translate-x-1 transition-transform">→</span>
+                </a>
               ))}
            </div>
+        </div>
+      )}
 
-           {/* Map Canvas */}
-           <div 
-                className="absolute inset-0 preserve-3d origin-center transition-transform duration-500 ease-out"
-                style={{
-                    transform: `translate3d(${viewState.panX}px, ${viewState.panY}px, 0) scale(${viewState.zoom}) rotateX(${viewState.rotateX}deg) rotateZ(${viewState.rotateZ}deg)`,
-                }}
-           >
-               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 preserve-3d" style={{ width: CONTAINER_SIZE, height: CONTAINER_SIZE }}>
-                    <div className={`absolute inset-0 rounded-3xl border-4 border-white/50 transition-all duration-500 bg-white ${mapMode !== 'standard' ? 'opacity-10' : 'opacity-100'}`}></div>
-                    
-                    {businesses.map((business) => {
-                        const colIndex = business.gridPosition.x - 1;
-                        const rowIndex = business.gridPosition.y - 1;
-                        const isFilteredOut = !filteredBusinesses.some(f => f.id === business.id);
-
-                        return (
-                            <div key={business.id} className="absolute preserve-3d" style={{ 
-                                width: CELL_SIZE, height: CELL_SIZE, 
-                                left: PADDING + colIndex * (CELL_SIZE + GAP), 
-                                top: PADDING + rowIndex * (CELL_SIZE + GAP) 
-                            }} >
-                                <BuildingBlock 
-                                    business={business} 
-                                    isHovered={hoveredId === business.id} 
-                                    isSelected={selectedBusinessId === business.id} 
-                                    isFilteredOut={isFilteredOut}
-                                    lod={currentLOD} 
-                                    onSelect={(b: any) => { setSelectedBusinessId(b.id); setIsSidebarOpen(true); }} 
-                                    onHover={setHoveredId} 
-                                    t={t} 
-                                    mapMode={mapMode}
-                                />
-                            </div>
-                        );
-                    })}
-               </div>
+      {/* Web Search Results Modal */}
+      {webResults && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl bg-brand-dark/95 backdrop-blur-xl rounded-[40px] shadow-2xl p-10 z-[70] animate-scale-in border border-white/10 text-white flex flex-col max-h-[85vh]">
+           <div className="flex justify-between items-center mb-8 shrink-0">
+              <div>
+                 <h3 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3 text-indigo-400">
+                    <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
+                    {t('globalDiscovery')}
+                 </h3>
+                 <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Grounding Query: {searchQuery}</p>
+              </div>
+              <button onClick={() => setWebResults(null)} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 text-slate-400 hover:text-white">✕</button>
            </div>
+           
+           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+              <div className="bg-white/5 rounded-3xl p-8 border border-white/10 mb-8">
+                 <p className="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{webResults.text}</p>
+              </div>
 
-           {/* Regional Insights Panel */}
-           {regionalInsights && (
-               <div className="absolute bottom-6 left-6 right-6 lg:left-auto lg:right-6 lg:w-[450px] bg-white rounded-3xl shadow-elevated border border-slate-200 z-30 animate-slide-up flex flex-col max-h-[60%] overflow-hidden">
-                  <div className="p-6 bg-brand-dark text-white flex justify-between items-center shrink-0">
-                     <div className="flex items-center gap-3">
-                        <span className="text-2xl">📍</span>
-                        <div>
-                           <h3 className="font-bold">Real-world Proximity</h3>
-                           <p className="text-[10px] text-slate-400 font-mono">Google Maps Grounding Engine</p>
-                        </div>
-                     </div>
-                     <button onClick={() => setRegionalInsights(null)} className="p-2 hover:bg-white/10 rounded-full">✕</button>
-                  </div>
-                  <div className="p-6 overflow-y-auto custom-scrollbar bg-slate-50 space-y-6">
-                     <p className="text-sm text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">{regionalInsights.text}</p>
-                     <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Places Mentioned:</h4>
-                        <div className="grid grid-cols-1 gap-2">
-                           {regionalInsights.links.map((link, i) => (
-                              <a 
-                                key={i} 
-                                href={link.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 hover:border-brand-primary group transition-all"
-                              >
-                                 <span className="text-xs font-bold text-slate-700 group-hover:text-brand-primary">{link.title}</span>
-                                 <span className="text-brand-primary">↗</span>
-                              </a>
-                           ))}
-                        </div>
-                     </div>
-                  </div>
-               </div>
-           )}
-
-           {loadingInsights && (
-               <div className="absolute inset-0 bg-brand-dark/40 backdrop-blur-sm z-40 flex items-center justify-center">
-                  <div className="bg-white p-8 rounded-3xl shadow-2xl text-center space-y-4">
-                     <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-                     <p className="font-bold text-slate-700">Syncing with Google Maps Satellite...</p>
-                  </div>
-               </div>
-           )}
-       </div>
-
-       {isSidebarOpen && selectedBusiness && !regionalInsights && (
-           <div className="w-full lg:w-[400px] bg-white rounded-[32px] shadow-elevated border border-slate-100 flex flex-col z-30 animate-fade-in h-fit shrink-0 overflow-hidden">
-               <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-start rounded-t-[32px]">
-                   <div className="flex gap-4 items-center">
-                       <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-1">
-                          {selectedBusiness.logoUrl ? (
-                            <img src={selectedBusiness.logoUrl} className="w-full h-full object-contain" alt="" />
-                          ) : (
-                            <div className="w-full h-full bg-brand-primary text-white flex items-center justify-center font-bold">م</div>
-                          )}
-                       </div>
-                       <div>
-                          <h2 className="text-xl font-bold text-brand-primary font-heading leading-tight">{selectedBusiness.name}</h2>
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{selectedBusiness.category}</span>
-                       </div>
-                   </div>
-                   <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-slate-200 rounded-full">✕</button>
-               </div>
-               <div className="p-8">
-                   <p className="text-slate-600 mb-8 text-sm leading-relaxed font-medium">{selectedBusiness.description}</p>
-                   
-                   <div className="space-y-4">
-                       {selectedBusiness.isOccupied ? (
-                          <div className="flex flex-col gap-3">
-                             <div className="grid grid-cols-2 gap-3">
-                                <button className="w-full py-3 bg-brand-primary text-white rounded-xl font-bold text-xs shadow-lg hover:brightness-110 flex items-center justify-center gap-2">
-                                   ✉️ {t('email')}
-                                </button>
-                                <button className="w-full py-3 bg-brand-dark text-white rounded-xl font-bold text-xs shadow-lg hover:bg-black flex items-center justify-center gap-2">
-                                   🔗 {t('visitSite')}
-                                </button>
+              {webResults.links.length > 0 && (
+                 <section>
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.25em] mb-6 flex items-center gap-2">
+                       <span className="w-4 h-px bg-indigo-500/50"></span>
+                       {t('searchSources')}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       {webResults.links.map((link, i) => (
+                          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="p-5 bg-white/5 border border-white/10 rounded-[24px] flex flex-col gap-2 group hover:bg-indigo-600/20 hover:border-indigo-500 transition-all">
+                             <div className="flex justify-between items-start">
+                                <span className="text-xs font-black text-slate-400 group-hover:text-indigo-300">SOURCE {i + 1}</span>
+                                <span className="text-indigo-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">↗</span>
                              </div>
-                             <button 
-                                onClick={() => setShowQRModal(selectedBusiness.id)}
-                                className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
-                             >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1l-3 3h2v5h2V8h2l-3-3V4zM4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7" /></svg>
-                                {t('showQRCode')}
-                             </button>
-                          </div>
-                       ) : (
-                          <button onClick={() => onRentClick(selectedBusiness)} className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-green-500">{t('rentFree')}</button>
-                       )}
-                   </div>
-               </div>
+                             <span className="font-bold text-white leading-tight line-clamp-2">{link.title}</span>
+                          </a>
+                       ))}
+                    </div>
+                 </section>
+              )}
            </div>
-       )}
 
-       {/* Business QR Identity Modal */}
-       {showQRModal && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-brand-dark/40 backdrop-blur-sm animate-fade-in">
-             <div className="bg-white w-full max-w-sm rounded-[40px] shadow-2xl p-10 border border-slate-100 animate-scale-in text-center relative">
-                <button onClick={() => setShowQRModal(null)} className="absolute top-6 right-6 p-2 text-slate-300 hover:text-slate-600 transition-colors">✕</button>
-                <div className="mb-6">
-                   <h3 className="text-xl font-bold text-brand-dark font-heading mb-1">{t('businessQRCode')}</h3>
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{businesses.find(b => b.id === showQRModal)?.name}</p>
-                </div>
-                <div className="bg-slate-50 p-6 rounded-[32px] border-2 border-slate-100 mb-8 inline-block shadow-inner">
-                   <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${showQRModal}`} 
-                      alt="QR Code" 
-                      className="w-48 h-48 mix-blend-multiply"
-                   />
-                </div>
-             </div>
-          </div>
-       )}
-
-       {/* QR Scanner HUD Overlay */}
-       {isScannerOpen && (
-          <QRScanner onScan={handleQRScan} onClose={() => setIsScannerOpen(false)} />
-       )}
+           <div className="mt-8 pt-8 border-t border-white/5 flex justify-center shrink-0">
+              <button onClick={() => setWebResults(null)} className="px-12 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all">Close Intelligence Panel</button>
+           </div>
+        </div>
+      )}
     </div>
   );
 };

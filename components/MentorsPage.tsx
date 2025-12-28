@@ -29,6 +29,7 @@ interface Mentor {
   studentsCount: number;
   projectsCount: number;
   synergyScore?: number; 
+  responseTime?: string;
   socials: {
     linkedin?: string;
     twitter?: string;
@@ -56,7 +57,7 @@ const MentorsPage: React.FC = () => {
         skills: ['Series A Pitching', 'Unit Economics', 'Product-Market Fit'],
         industries: ['Fintech', 'SaaS', 'E-commerce'],
         specialization: language === 'ar' ? 'نمو الاستراتيجيات وتمويل الفئة أ' : 'Strategic Growth & Series A Funding',
-        mentorshipStyle: 'Direct & Results-Driven',
+        mentorshipStyle: language === 'ar' ? 'مباشر ونتائجي' : 'Direct & Results-Driven',
         languages: ['Arabic', 'English'],
         bio: language === 'ar' ? 'مهندس سابق في جوجل بخبرة تزيد عن 12 عاماً في بناء الأنظمة المالية ومساعدة المؤسسين على تجاوز مراحل النمو المبكرة.' : 'Ex-Google engineer with 12+ years experience building financial systems and helping founders navigate early-stage growth.',
         background: 'Former Engineering Lead at Google & CTO of Careem Pay',
@@ -67,6 +68,7 @@ const MentorsPage: React.FC = () => {
         rating: 4.9,
         studentsCount: 142,
         projectsCount: 28,
+        responseTime: '< 2 hrs',
         socials: { linkedin: '#', twitter: '#', website: '#' }
       },
       { 
@@ -80,7 +82,7 @@ const MentorsPage: React.FC = () => {
         skills: ['Labor Law', 'Corporate Governance', 'Scaling Teams'],
         industries: ['Real Estate', 'Logistics', 'Professional Services'],
         specialization: language === 'ar' ? 'حوكمة الشركات والامتثال' : 'Corporate Governance & Compliance',
-        mentorshipStyle: 'Empathetic & Structured',
+        mentorshipStyle: language === 'ar' ? 'متعاطف ومنظم' : 'Empathetic & Structured',
         languages: ['Arabic', 'English', 'French'],
         bio: language === 'ar' ? 'متخصص في قانون الشركات في الشرق الأوسط والتصميم التنظيمي. خبير في التوسع العابر للحدود وسياسات الموارد البشرية عن بعد.' : 'Specialist in Middle Eastern corporate law and organizational design. Expert in cross-border scaling and remote HR policies.',
         background: 'Senior Legal Advisor & HR Transformation Specialist',
@@ -91,6 +93,7 @@ const MentorsPage: React.FC = () => {
         rating: 4.8,
         studentsCount: 89,
         projectsCount: 15,
+        responseTime: '< 4 hrs',
         socials: { linkedin: '#', website: '#' }
       },
       { 
@@ -104,7 +107,7 @@ const MentorsPage: React.FC = () => {
         skills: ['Performance Marketing', 'SEO/SEM', 'Viral Marketing'],
         industries: ['Retail', 'Consumer Tech', 'Entertainment'],
         specialization: language === 'ar' ? 'التسويق الرقمي واستحواذ المستخدمين' : 'Digital Marketing & User Acquisition',
-        mentorshipStyle: 'Creative & Analytical',
+        mentorshipStyle: language === 'ar' ? 'إبداعي وتحليلي' : 'Creative & Analytical',
         languages: ['Arabic', 'English'],
         bio: language === 'ar' ? 'مسوق نمو يركز على مسارات التحويل عالية الأداء للشركات الناشئة B2B. سجل حافل في تقليل تكاليف الاستحواذ.' : 'Growth hacker focused on high-conversion funnels for B2B startups. Proven track record in reducing customer acquisition costs.',
         background: 'Ex-Marketing Director at HungerStation',
@@ -115,15 +118,15 @@ const MentorsPage: React.FC = () => {
         rating: 5.0,
         studentsCount: 215,
         projectsCount: 42,
+        responseTime: '< 1 hr',
         socials: { twitter: '#', website: '#' }
       }
     ];
 
     return raw.map(m => {
        const userSector = MY_BUSINESS_GENOME.genomeProfile.industrySector.toLowerCase();
-       const mentorInd = m.industries.map(i => i.toLowerCase());
        let score = 70 + Math.floor(Math.random() * 20); 
-       if (mentorInd.some(ind => ind.includes(userSector) || userSector.includes(ind))) {
+       if (m.industries.some(ind => ind.toLowerCase().includes(userSector) || userSector.includes(ind.toLowerCase()))) {
           score += 10;
        }
        return { ...m, synergyScore: Math.min(score, 99) };
@@ -133,7 +136,6 @@ const MentorsPage: React.FC = () => {
   const filteredMentors = mentorsData.filter(m => 
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    m.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
     m.specialization.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -155,16 +157,22 @@ const MentorsPage: React.FC = () => {
 
     return (
         <div className="mt-8 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
-            <div className="flex justify-between items-center mb-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse"></span>
-                    {t('availableTime')}
-                </h4>
-                <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/5 px-2 py-1 rounded-md">
-                    {mentor.weeklyOverview}
-                </span>
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse"></span>
+                      {t('availableTime')}
+                  </h4>
+                  <p className="text-[11px] font-bold text-brand-dark">{language === 'ar' ? 'اختر يوماً للمعاينة' : 'Select a day for preview'}</p>
+                </div>
+                <div className="flex flex-col items-end">
+                   <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-xl border border-brand-primary/20">
+                       {mentor.weeklyOverview}
+                   </span>
+                   <span className="text-[9px] font-bold text-slate-400 mt-2">Response: {mentor.responseTime}</span>
+                </div>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar-thin">
+            <div className="flex gap-2 overflow-x-auto pb-4 custom-scrollbar-thin">
                 {nextDays.map((day, i) => {
                     const isToday = day.toDateString() === new Date().toDateString();
                     const isAvailable = (i + parseInt(mentor.id)) % 3 !== 0; 
@@ -173,36 +181,38 @@ const MentorsPage: React.FC = () => {
                             key={i}
                             disabled={!isAvailable}
                             onClick={() => handleDaySelect(mentor, day)}
-                            className={`flex flex-col items-center min-w-[64px] py-4 rounded-2xl border transition-all duration-300 group
+                            className={`flex flex-col items-center min-w-[70px] py-5 rounded-2xl border transition-all duration-300 group
                                 ${isAvailable 
                                     ? 'bg-white border-slate-200 hover:border-brand-primary hover:shadow-md cursor-pointer' 
                                     : 'bg-slate-100/50 border-transparent opacity-40 cursor-not-allowed'
                                 }
-                                ${isToday && isAvailable ? 'ring-2 ring-brand-primary/20 border-brand-primary' : ''}
+                                ${isToday && isAvailable ? 'ring-2 ring-brand-primary/20 border-brand-primary shadow-lg shadow-brand-primary/5' : ''}
                             `}
                         >
-                            <span className={`text-[10px] font-bold uppercase mb-1 ${isAvailable ? 'text-slate-400 group-hover:text-brand-primary' : 'text-slate-300'}`}>
+                            <span className={`text-[10px] font-bold uppercase mb-1.5 ${isAvailable ? 'text-slate-400 group-hover:text-brand-primary' : 'text-slate-300'}`}>
                                 {day.toLocaleDateString(language, { weekday: 'short' })}
                             </span>
-                            <span className={`text-base font-black ${isAvailable ? 'text-brand-dark group-hover:text-brand-primary' : 'text-slate-300'}`}>
+                            <span className={`text-lg font-black ${isAvailable ? 'text-brand-dark group-hover:text-brand-primary' : 'text-slate-300'}`}>
                                 {day.getDate()}
                             </span>
                             {isAvailable && (
-                                <div className="mt-2 flex gap-0.5">
-                                    <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
-                                    <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
+                                <div className="mt-3 flex gap-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div>
                                 </div>
                             )}
                         </button>
                     );
                 })}
-                <button 
-                   onClick={() => setSelectedMentor(mentor)}
-                   className="flex flex-col items-center justify-center min-w-[64px] py-4 rounded-2xl border border-dashed border-slate-300 bg-white hover:border-brand-primary hover:bg-brand-primary/5 transition-all text-slate-400 hover:text-brand-primary"
-                >
-                   <span className="text-xl">📅</span>
-                   <span className="text-[8px] font-black uppercase mt-1">Full</span>
-                </button>
+            </div>
+            
+            <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+               {mentor.availableSlots.slice(0, 3).map((slot, i) => (
+                  <div key={i} className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-slate-100 shadow-sm">
+                     <span className="text-lg">🕒</span>
+                     <span className="text-[11px] font-black text-slate-600">{slot}</span>
+                  </div>
+               ))}
             </div>
         </div>
     );
@@ -263,6 +273,8 @@ const MentorsPage: React.FC = () => {
                  {filteredMentors.length > 0 ? (
                     filteredMentors.map((mentor, idx) => (
                        <div key={mentor.id} className="group bg-white rounded-[48px] overflow-hidden shadow-card hover:shadow-elevated border border-slate-100 transition-all duration-700 flex flex-col hover:-translate-y-1 relative animate-slide-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+                          
+                          {/* Synergy HUD */}
                           <div className="absolute top-8 right-8 z-10">
                              <div className="relative w-16 h-16 flex items-center justify-center">
                                 <svg className="w-full h-full -rotate-90">
@@ -271,71 +283,108 @@ const MentorsPage: React.FC = () => {
                                 </svg>
                                 <div className="absolute flex flex-col items-center">
                                    <span className="text-xs font-black text-brand-dark">{mentor.synergyScore}%</span>
-                                   <span className="text-[6px] font-black text-brand-primary uppercase tracking-tighter">Synergy</span>
+                                   <span className="text-[6px] font-black text-brand-primary uppercase tracking-tighter">Match</span>
                                 </div>
                              </div>
                           </div>
 
                           <div className="p-10">
-                             <div className="flex flex-col md:flex-row gap-10">
+                             <div className="flex flex-col md:flex-row gap-12">
                                 <div className="shrink-0 flex flex-col items-center">
                                    <div className="relative mb-6">
-                                      <div className={`w-32 h-32 rounded-[44px] flex items-center justify-center text-5xl font-black text-white shadow-2xl ${mentor.color}`}>
+                                      <div className={`w-36 h-36 rounded-[44px] flex items-center justify-center text-5xl font-black text-white shadow-2xl ${mentor.color} ring-8 ring-slate-50 group-hover:scale-105 transition-transform duration-500`}>
                                          {mentor.initials}
                                       </div>
-                                      <div className={`absolute -bottom-2 -right-2 w-9 h-9 border-4 border-white rounded-full ${mentor.available ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-300'}`}></div>
+                                      <div className={`absolute -bottom-1 -right-1 w-10 h-10 border-4 border-white rounded-full ${mentor.available ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-300'}`}></div>
                                    </div>
-                                   <div className="flex items-center gap-2 text-brand-accent px-5 py-2 bg-brand-dark rounded-full shadow-lg">
-                                      <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                                      <span className="text-base font-black text-white font-mono">{mentor.rating}</span>
+                                   
+                                   <div className="grid grid-cols-2 gap-3 w-full mb-6">
+                                      <div className="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                                         <div className="text-xs font-black text-brand-dark leading-tight">{mentor.studentsCount}</div>
+                                         <div className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">Mentored</div>
+                                      </div>
+                                      <div className="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                                         <div className="text-xs font-black text-brand-dark leading-tight font-mono">{mentor.rating}⭐</div>
+                                         <div className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">Rating</div>
+                                      </div>
+                                   </div>
+
+                                   <div className="w-full space-y-3">
+                                      <h4 className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">{t('languages')}</h4>
+                                      <div className="flex flex-wrap justify-center gap-1.5">
+                                         {mentor.languages.map(lang => (
+                                            <span key={lang} className="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black text-slate-600 uppercase tracking-tighter">{lang}</span>
+                                         ))}
+                                      </div>
                                    </div>
                                 </div>
 
                                 <div className="flex-1">
                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8 pr-16">
                                       <div>
-                                         <h3 className="text-3xl font-black text-brand-dark font-heading leading-tight">{mentor.name}</h3>
-                                         <p className="text-sm font-bold text-brand-primary uppercase tracking-[0.25em] mt-3">{mentor.specialization}</p>
+                                         <h3 className="text-4xl font-black text-brand-dark font-heading leading-tight mb-2">{mentor.name}</h3>
+                                         <div className="inline-block px-4 py-2 bg-brand-primary text-white rounded-xl text-[10px] font-black uppercase tracking-[0.25em] shadow-lg shadow-brand-primary/20">
+                                            {mentor.specialization}
+                                         </div>
                                       </div>
                                    </div>
                                    
-                                   <div className="mb-8">
-                                      <div className="flex flex-wrap gap-2 mb-4">
-                                         {mentor.expertise.map((exp, i) => (
-                                            <span key={i} className="px-3 py-1 bg-brand-primary/5 text-brand-primary border border-brand-primary/10 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                               {exp}
-                                            </span>
-                                         ))}
+                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                                      <div>
+                                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <span className="w-4 h-px bg-slate-200"></span>
+                                            {language === 'ar' ? 'ركائز المعرفة' : 'Expertise Pillars'}
+                                         </h4>
+                                         <div className="flex flex-wrap gap-2">
+                                            {mentor.expertise.map((exp, i) => (
+                                               <div key={i} className="px-3 py-2 bg-brand-primary/5 text-brand-primary border border-brand-primary/10 rounded-xl text-[10px] font-black uppercase tracking-tight hover:bg-brand-primary hover:text-white transition-all duration-300">
+                                                  {exp}
+                                               </div>
+                                            ))}
+                                         </div>
                                       </div>
-                                      <p className="text-xs text-slate-500 font-bold flex items-center gap-3 bg-slate-50 w-fit px-4 py-2 rounded-full border border-slate-100">
-                                         <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
-                                         {mentor.background} • {mentor.experience} {language === 'ar' ? 'خبرة' : 'Experience'}
-                                      </p>
+                                      <div>
+                                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <span className="w-4 h-px bg-slate-200"></span>
+                                            {language === 'ar' ? 'أسلوب الإرشاد' : 'Mentorship Style'}
+                                         </h4>
+                                         <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center gap-3">
+                                            <span className="text-xl">✨</span>
+                                            <span className="text-xs font-black text-indigo-900 leading-tight uppercase tracking-tight">{mentor.mentorshipStyle}</span>
+                                         </div>
+                                      </div>
                                    </div>
 
-                                   <p className="text-sm text-slate-600 leading-relaxed font-medium mb-10 italic border-l-4 border-brand-accent pl-6 py-2">
+                                   <p className="text-base text-slate-600 leading-relaxed font-medium mb-10 italic border-l-4 border-brand-accent pl-8 py-3 bg-slate-50/30 rounded-r-3xl">
                                       "{mentor.bio}"
                                    </p>
 
-                                   <div className="mb-8">
-                                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{language === 'ar' ? 'القطاعات المدعومة' : 'Target Industries'}</h4>
-                                      <div className="flex flex-wrap gap-2">
+                                   <div className="mb-10">
+                                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                         <span className="w-4 h-px bg-slate-200"></span>
+                                         {language === 'ar' ? 'التركيز الصناعي' : 'Industry Focus'}
+                                      </h4>
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                          {mentor.industries.map((ind, i) => (
-                                            <span key={i} className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-[9px] font-bold">
+                                            <div key={i} className="px-4 py-3 bg-slate-100/80 text-slate-700 rounded-2xl text-[11px] font-black flex items-center gap-3 border border-slate-200 group-hover:bg-white transition-colors">
+                                               <span className="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-brand-accent transition-colors"></span>
                                                {ind}
-                                            </span>
+                                            </div>
                                          ))}
                                       </div>
                                    </div>
 
                                    <AvailabilityStrip mentor={mentor} />
 
-                                   <div className="mt-10">
+                                   <div className="mt-12">
                                       <button 
                                          onClick={() => setSelectedMentor(mentor)}
-                                         className="w-full py-5 bg-brand-dark text-white rounded-[24px] font-black text-sm hover:bg-brand-primary hover:shadow-2xl transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 group"
+                                         className="w-full py-6 bg-brand-dark text-white rounded-[32px] font-black text-lg hover:bg-brand-primary hover:shadow-2xl transition-all flex items-center justify-center gap-4 shadow-xl active:scale-95 group/btn"
                                       >
-                                         <svg className="w-6 h-6 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                         <div className="relative">
+                                            <svg className="w-8 h-8 group-hover/btn:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-brand-accent rounded-full border-2 border-brand-dark animate-bounce"></div>
+                                         </div>
                                          {t('bookSession')}
                                       </button>
                                    </div>
