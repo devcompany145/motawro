@@ -1,6 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import AIMentorAssistant from './AIMentorAssistant';
+import MentorBookingModal from './MentorBookingModal';
 
 interface Mentor {
   id: string;
@@ -9,15 +11,35 @@ interface Mentor {
   initials: string;
   color: string;
   available: boolean;
+  expertise: string[]; 
+  skills: string[]; 
+  industries: string[]; 
+  specialization: string;
+  mentorshipStyle: string;
+  languages: string[];
+  bio: string;
+  experience: string;
+  background: string; 
+  nextAvailable: string;
+  weeklyOverview: string; 
+  availableSlots: string[];
+  rating: number;
+  studentsCount: number;
+  projectsCount: number;
+  socials: {
+    linkedin?: string;
+    twitter?: string;
+    website?: string;
+  };
 }
 
 const MentorsPage: React.FC = () => {
-  const { t, language } = useLanguage();
+  const { t, language, dir } = useLanguage();
   const [activeTab, setActiveTab] = useState<'working_hours' | 'sessions' | 'my_bookings'>('working_hours');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState<number | null>(17);
+  const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
+  const [preselectedDate, setPreselectedDate] = useState<Date | null>(null);
 
-  // Stats Data
   const stats = [
     { icon: 'check', count: 0, label: t('myBookings'), color: 'text-orange-500', bg: 'bg-orange-50' },
     { icon: 'calendar', count: 0, label: t('upcomingSession'), color: 'text-pink-500', bg: 'bg-pink-50' },
@@ -25,44 +47,154 @@ const MentorsPage: React.FC = () => {
     { icon: 'users', count: 11, label: t('expertMentor'), color: 'text-green-500', bg: 'bg-green-50' },
   ];
 
-  // Mock Mentors Data
   const mentorsData: Mentor[] = [
-    { id: '1', name: 'Mohamed Salama', image: '', initials: 'MS', color: 'bg-emerald-500', available: true },
-    { id: '2', name: 'Mohamed O. Yousif', image: '', initials: 'MO', color: 'bg-emerald-500', available: true },
-    { id: '3', name: 'Khalid Khamis', image: '', initials: 'KK', color: 'bg-orange-500', available: true },
-    { id: '4', name: 'Mazen Al Wahsh', image: '', initials: 'MA', color: 'bg-emerald-500', available: true },
-    { id: '5', name: 'Khalid Khamis', image: '', initials: 'KK', color: 'bg-orange-500', available: true }, // Duplicate as per image sample
-    { id: '6', name: 'Issa Ewaiad Alsaedi', image: '', initials: 'IE', color: 'bg-blue-500', available: true },
-    { id: '7', name: 'Ahmed', image: '', initials: 'A', color: 'bg-orange-500', available: true },
-    { id: '8', name: 'Sara', image: '', initials: 'S', color: 'bg-orange-500', available: true },
-    { id: '9', name: 'John Doe', image: '', initials: 'JD', color: 'bg-blue-500', available: true },
+    { 
+      id: '1', 
+      name: language === 'ar' ? 'محمد سلامة' : 'Mohamed Salama', 
+      image: '', 
+      initials: 'MS', 
+      color: 'bg-indigo-600', 
+      available: true,
+      expertise: ['Growth Strategy', 'Fundraising'],
+      skills: ['Series A Pitching', 'Unit Economics', 'Product-Market Fit'],
+      industries: ['Fintech', 'SaaS', 'E-commerce'],
+      specialization: 'Strategic Growth & Series A Funding',
+      mentorshipStyle: 'Direct & Results-Driven',
+      languages: ['Arabic', 'English'],
+      bio: language === 'ar' ? 'مهندس سابق في جوجل بخبرة تزيد عن 12 عاماً في بناء الأنظمة المالية ومساعدة المؤسسين على تجاوز مراحل النمو المبكرة.' : 'Ex-Google engineer with 12+ years experience building financial systems and helping founders navigate early-stage growth.',
+      background: 'Former Engineering Lead at Google & CTO of Careem Pay',
+      experience: '12 Years',
+      nextAvailable: 'Today, 2:00 PM',
+      weeklyOverview: 'Sun - Wed',
+      availableSlots: ['2:00 PM', '4:30 PM', 'Tomorrow 11:00 AM'],
+      rating: 4.9,
+      studentsCount: 142,
+      projectsCount: 28,
+      socials: { linkedin: '#', twitter: '#', website: '#' }
+    },
+    { 
+      id: '2', 
+      name: language === 'ar' ? 'محمد يوسف' : 'Mohamed O. Yousif', 
+      image: '', 
+      initials: 'MO', 
+      color: 'bg-emerald-600', 
+      available: true,
+      expertise: ['Operations', 'Legal Compliance'],
+      skills: ['Labor Law', 'Corporate Governance', 'Scaling Teams'],
+      industries: ['Real Estate', 'Logistics', 'Professional Services'],
+      specialization: 'Corporate Governance & Compliance',
+      mentorshipStyle: 'Empathetic & Structured',
+      languages: ['Arabic', 'English', 'French'],
+      bio: language === 'ar' ? 'متخصص في قانون الشركات في الشرق الأوسط والتصميم التنظيمي. خبير في التوسع العابر للحدود وسياسات الموارد البشرية عن بعد.' : 'Specialist in Middle Eastern corporate law and organizational design. Expert in cross-border scaling and remote HR policies.',
+      background: 'Senior Legal Advisor & HR Transformation Specialist',
+      experience: '15 Years',
+      nextAvailable: 'Tomorrow, 10:00 AM',
+      weeklyOverview: 'Mon - Fri',
+      availableSlots: ['Tomorrow 10:00 AM', 'Tomorrow 1:00 PM'],
+      rating: 4.8,
+      studentsCount: 89,
+      projectsCount: 15,
+      socials: { linkedin: '#', website: '#' }
+    },
+    { 
+      id: '3', 
+      name: language === 'ar' ? 'خالد خميس' : 'Khalid Khamis', 
+      image: '', 
+      initials: 'KK', 
+      color: 'bg-orange-600', 
+      available: true,
+      expertise: ['Marketing', 'Brand Identity'],
+      skills: ['Performance Marketing', 'SEO/SEM', 'Viral Marketing'],
+      industries: ['Retail', 'Consumer Tech', 'Entertainment'],
+      specialization: 'Digital Marketing & User Acquisition',
+      mentorshipStyle: 'Creative & Analytical',
+      languages: ['Arabic', 'English'],
+      bio: language === 'ar' ? 'مسوق نمو يركز على مسارات التحويل عالية الأداء للشركات الناشئة B2B. سجل حافل في تقليل تكاليف الاستحواذ.' : 'Growth hacker focused on high-conversion funnels for B2B startups. Proven track record in reducing customer acquisition costs.',
+      background: 'Ex-Marketing Director at HungerStation',
+      experience: '8 Years',
+      nextAvailable: 'Wed, 4:30 PM',
+      weeklyOverview: 'Sat, Sun, Tue',
+      availableSlots: ['Wed 4:30 PM', 'Thu 9:00 AM', 'Thu 2:00 PM'],
+      rating: 5.0,
+      studentsCount: 215,
+      projectsCount: 42,
+      socials: { twitter: '#', website: '#' }
+    }
   ];
 
   const filteredMentors = mentorsData.filter(m => 
-    m.name.toLowerCase().includes(searchQuery.toLowerCase())
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    m.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    m.specialization.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Calendar Mock Data (December 2025)
-  const daysInMonth = 31;
-  const startDay = 1; // Assume starts on Monday for Dec 2025 mock
-  const weekDays = language === 'ar' 
-    ? ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
-    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  const getCalendarDays = () => {
-    const days = [];
-    for (let i = 0; i < startDay; i++) {
-      days.push(null);
-    }
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    return days;
+  const handleDaySelect = (mentor: Mentor, day: Date) => {
+      setPreselectedDate(day);
+      setSelectedMentor(mentor);
   };
 
-  const calendarDays = getCalendarDays();
+  const AvailabilityStrip = ({ mentor }: { mentor: Mentor }) => {
+    const nextDays = useMemo(() => {
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            days.push(d);
+        }
+        return days;
+    }, []);
 
-  // Helper for icons
+    return (
+        <div className="mt-8 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse"></span>
+                {t('availableTime')}
+            </h4>
+            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar-thin">
+                {nextDays.map((day, i) => {
+                    const isToday = day.toDateString() === new Date().toDateString();
+                    const isAvailable = (i + parseInt(mentor.id)) % 3 !== 0; // Mock availability logic
+                    return (
+                        <button 
+                            key={i}
+                            disabled={!isAvailable}
+                            onClick={() => handleDaySelect(mentor, day)}
+                            className={`flex flex-col items-center min-w-[64px] py-4 rounded-2xl border transition-all duration-300 group
+                                ${isAvailable 
+                                    ? 'bg-white border-slate-200 hover:border-brand-primary hover:shadow-md cursor-pointer' 
+                                    : 'bg-slate-100/50 border-transparent opacity-40 cursor-not-allowed'
+                                }
+                                ${isToday && isAvailable ? 'ring-2 ring-brand-primary/20 border-brand-primary' : ''}
+                            `}
+                        >
+                            <span className={`text-[10px] font-bold uppercase mb-1 ${isAvailable ? 'text-slate-400 group-hover:text-brand-primary' : 'text-slate-300'}`}>
+                                {day.toLocaleDateString(language, { weekday: 'short' })}
+                            </span>
+                            <span className={`text-base font-black ${isAvailable ? 'text-brand-dark group-hover:text-brand-primary' : 'text-slate-300'}`}>
+                                {day.getDate()}
+                            </span>
+                            {isAvailable && (
+                                <div className="mt-2 flex gap-0.5">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
+                                    <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
+                                </div>
+                            )}
+                        </button>
+                    );
+                })}
+                <button 
+                    onClick={() => setSelectedMentor(mentor)}
+                    className="flex flex-col items-center justify-center min-w-[64px] py-4 rounded-2xl bg-brand-primary/5 border border-dashed border-brand-primary/30 text-brand-primary hover:bg-brand-primary hover:text-white transition-all group"
+                >
+                    <span className="text-lg">📅</span>
+                    <span className="text-[8px] font-bold uppercase mt-1">Full View</span>
+                </button>
+            </div>
+        </div>
+    );
+  };
+
   const getIcon = (type: string) => {
     switch(type) {
       case 'check': return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />;
@@ -76,174 +208,205 @@ const MentorsPage: React.FC = () => {
   return (
     <div className="animate-fade-in w-full bg-brand-bg min-h-screen">
       
-      {/* Header with Background Pattern */}
-      <div className="bg-white border-b border-white/5 pt-12 pb-8 text-center relative overflow-hidden">
-         <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-30 pointer-events-none"></div>
-         <div className="relative z-10 max-w-4xl mx-auto px-6">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold uppercase tracking-widest mb-4">
-               ✨ برنامج الإرشاد 2025
+      {/* Immersive Header */}
+      <div className="bg-white border-b border-slate-100 pt-16 pb-12 text-center relative overflow-hidden">
+         <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none"></div>
+         <div className="relative z-10 max-w-5xl mx-auto px-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-[10px] font-bold uppercase tracking-widest mb-6">
+               ✨ Mentorship Ecosystem 2025
             </div>
-            <h1 className="text-4xl font-heading font-bold text-brand-dark mb-4 text-green-600">{t('mentorsTitle')}</h1>
-            <p className="text-slate-500 text-lg max-w-2xl mx-auto leading-relaxed">
-              {t('mentorsSubtitle')}
+            <h1 className="text-4xl md:text-5xl font-heading font-black text-brand-dark mb-6">{t('mentorsTitle')}</h1>
+            <p className="text-slate-500 text-xl max-w-3xl mx-auto leading-relaxed font-medium">
+              Scale your digital venture with one-on-one strategic sessions led by proven industry builders.
             </p>
          </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-12">
         
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {stats.map((stat, idx) => (
-            <div key={idx} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center transition-transform hover:-translate-y-1">
-               <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 text-2xl ${stat.bg} ${stat.color}`}>
-                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div key={idx} className="bg-white rounded-3xl p-8 shadow-card border border-slate-100 flex flex-col items-center justify-center text-center transition-all hover:-translate-y-1 hover:shadow-elevated">
+               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 text-2xl ${stat.bg} ${stat.color} shadow-inner`}>
+                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     {getIcon(stat.icon)}
                   </svg>
                </div>
-               <div className="text-3xl font-bold text-slate-800 mb-1">{stat.count}</div>
-               <div className="text-sm font-bold text-slate-400">{stat.label}</div>
+               <div className="text-4xl font-black text-brand-dark mb-1 font-mono">{stat.count}</div>
+               <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{stat.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Action Bar & Controls */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-           
-           <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <button 
-                onClick={() => setActiveTab('working_hours')}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'working_hours' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                 {t('workingHours')}
-              </button>
-              <button 
-                onClick={() => setActiveTab('sessions')}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'sessions' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                 {t('sessions')}
-              </button>
-              <button 
-                onClick={() => setActiveTab('my_bookings')}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'my_bookings' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                 {t('myBookings')}
-              </button>
-           </div>
-
-           <div className="w-full md:w-auto">
-              <div className="relative">
-                 <input 
-                   type="text" 
-                   value={searchQuery}
-                   onChange={(e) => setSearchQuery(e.target.value)}
-                   placeholder={t('searchMentor')}
-                   className="w-full md:w-64 pl-4 pr-10 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-sm font-medium"
-                 />
-                 <svg className="absolute right-3 top-3.5 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                 </svg>
-              </div>
-           </div>
-        </div>
-
-        {/* Calendar Section */}
-        <div className="bg-slate-100 rounded-2xl p-6 border border-slate-200 mb-12 overflow-hidden">
-           <div className="flex items-center gap-4 mb-6">
-              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                 <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                 ديسمبر 2025
-              </h2>
-              <div className="flex gap-2">
-                 <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 text-slate-600">{'<'}</button>
-                 <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 text-slate-600">{'>'}</button>
-              </div>
-           </div>
-
-           <div className="grid grid-cols-7 gap-px bg-slate-200 rounded-xl overflow-hidden border border-slate-200">
-              {/* Week Headers */}
-              {weekDays.map((d, i) => (
-                 <div key={i} className="bg-white p-3 text-center text-xs font-bold text-slate-500 uppercase">
-                    {d}
-                 </div>
+        {/* Controls */}
+        <div className="bg-white rounded-[32px] p-5 shadow-card border border-slate-100 mb-10 flex flex-col md:flex-row justify-between items-center gap-6">
+           <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+              {['working_hours', 'sessions', 'my_bookings'].map((tab) => (
+                <button 
+                  key={tab}
+                  onClick={() => setActiveTab(tab as any)}
+                  className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-sm transition-all whitespace-nowrap ${activeTab === tab ? 'bg-brand-dark text-white shadow-xl' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                   {t(tab === 'working_hours' ? 'workingHours' : tab === 'sessions' ? 'sessions' : 'myBookings')}
+                </button>
               ))}
-              {/* Days */}
-              {calendarDays.map((day, i) => {
-                 const isSelected = day === selectedDate;
-                 return (
-                    <div 
-                       key={i} 
-                       onClick={() => day && setSelectedDate(day)}
-                       className={`bg-white min-h-[100px] p-3 relative cursor-pointer hover:bg-emerald-50/30 transition-colors ${!day ? 'bg-slate-50' : ''} ${isSelected ? 'ring-2 ring-inset ring-emerald-500 bg-emerald-50/50' : ''}`}
-                    >
-                       {day && (
-                          <>
-                             <span className={`text-sm font-bold ${isSelected ? 'text-emerald-600' : 'text-slate-700'}`}>{day}</span>
-                             {/* Example indicators for availability */}
-                             {[10, 15, 17, 20].includes(day) && (
-                                <div className="mt-2 space-y-1">
-                                   <div className="h-1.5 w-full bg-emerald-100 rounded-full overflow-hidden">
-                                      <div className="h-full bg-emerald-500 w-3/4"></div>
-                                   </div>
-                                </div>
-                             )}
-                          </>
-                       )}
-                    </div>
-                 );
-              })}
            </div>
-        </div>
 
-        {/* Search Input (Duplicate as per design - optionally remove one) */}
-        <div className="mb-8">
-           <div className="relative max-w-md mx-auto">
+           <div className="w-full md:w-auto relative group">
               <input 
                 type="text" 
-                placeholder={t('searchMentor')} 
-                className="w-full py-3 px-6 rounded-full border border-slate-200 shadow-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-center"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('searchMentor')}
+                className="w-full md:w-96 px-8 py-4 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-brand-primary/5 focus:border-brand-primary outline-none text-sm font-bold transition-all bg-slate-50/50 group-hover:bg-white"
               />
+              <svg className={`absolute ${dir === 'rtl' ? 'left-6' : 'right-6'} top-4 w-6 h-6 text-slate-300 group-focus-within:text-brand-primary transition-colors`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
            </div>
         </div>
 
-        {/* Mentors Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {filteredMentors.length > 0 ? (
-              filteredMentors.map(mentor => (
-                 <div key={mentor.id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center transition-all hover:shadow-card hover:-translate-y-1">
-                    <div className="relative mb-4">
-                       <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-3xl font-bold text-white shadow-lg ${mentor.color}`}>
-                          {mentor.initials}
-                       </div>
-                       {mentor.available && (
-                          <div className="absolute -bottom-2 -right-2 bg-white p-1 rounded-full">
-                             <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
+           
+           <div className="lg:col-span-1 lg:sticky lg:top-24 h-[700px]">
+              <AIMentorAssistant mentors={mentorsData} />
+           </div>
+
+           <div className="lg:col-span-2 grid grid-cols-1 gap-10">
+              {filteredMentors.length > 0 ? (
+                 filteredMentors.map(mentor => (
+                    <div key={mentor.id} className="group bg-white rounded-[48px] overflow-hidden shadow-card hover:shadow-elevated border border-slate-100 transition-all duration-700 flex flex-col hover:-translate-y-1 relative">
+                       
+                       <div className="p-10">
+                          <div className="flex flex-col md:flex-row gap-10">
+                             {/* Identity Panel */}
+                             <div className="shrink-0 flex flex-col items-center">
+                                <div className="relative mb-6">
+                                   <div className={`w-32 h-32 rounded-[44px] flex items-center justify-center text-5xl font-black text-white shadow-2xl ${mentor.color}`}>
+                                      {mentor.initials}
+                                   </div>
+                                   <div className={`absolute -bottom-2 -right-2 w-9 h-9 border-4 border-white rounded-full ${mentor.available ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-300'}`}></div>
+                                </div>
+                                <div className="flex items-center gap-2 text-brand-accent px-5 py-2 bg-brand-dark rounded-full shadow-lg">
+                                   <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                   <span className="text-base font-black text-white font-mono">{mentor.rating}</span>
+                                </div>
+                                <div className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{mentor.studentsCount}+ Mentored</div>
+                             </div>
+
+                             {/* Content Panel */}
+                             <div className="flex-1">
+                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8">
+                                   <div>
+                                      <h3 className="text-3xl font-black text-brand-dark font-heading leading-tight">{mentor.name}</h3>
+                                      <p className="text-sm font-bold text-brand-primary uppercase tracking-[0.25em] mt-3">{mentor.specialization}</p>
+                                   </div>
+                                   <div className="flex gap-2">
+                                      {mentor.socials.linkedin && (
+                                         <a href={mentor.socials.linkedin} className="w-11 h-11 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-brand-primary hover:border-brand-primary transition-all">
+                                            <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+                                         </a>
+                                      )}
+                                   </div>
+                                </div>
+                                
+                                <p className="text-xs text-slate-500 font-bold mb-8 flex items-center gap-3 bg-slate-50 w-fit px-4 py-2 rounded-full border border-slate-100">
+                                   <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
+                                   {mentor.background} • {mentor.experience} Experience
+                                </p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-8 border-y border-slate-100 mb-8">
+                                   <div>
+                                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">{t('industrySector')}</h4>
+                                      <div className="flex flex-wrap gap-2">
+                                         {mentor.industries.map((ind, i) => (
+                                            <span key={i} className="px-4 py-2 bg-brand-primary/5 text-brand-primary text-[10px] font-black rounded-xl border border-brand-primary/10">
+                                               {ind}
+                                            </span>
+                                         ))}
+                                      </div>
+                                   </div>
+                                   <div>
+                                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Core Focus Skills</h4>
+                                      <div className="flex flex-wrap gap-2">
+                                         {mentor.skills.map((skill, i) => (
+                                            <span key={i} className="px-4 py-2 bg-slate-50 text-slate-600 text-[10px] font-black rounded-xl border border-slate-200">
+                                               {skill}
+                                            </span>
+                                         ))}
+                                      </div>
+                                   </div>
+                                </div>
+
+                                <p className="text-sm text-slate-600 leading-relaxed font-medium mb-10 italic border-l-4 border-brand-accent pl-6 py-2">
+                                   "{mentor.bio}"
+                                </p>
+
+                                {/* Dynamic Availability Component */}
+                                <AvailabilityStrip mentor={mentor} />
+
+                                <div className="mt-10 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                                   <button 
+                                      onClick={() => setSelectedMentor(mentor)}
+                                      className="flex-1 py-5 bg-brand-dark text-white rounded-[24px] font-black text-sm hover:bg-brand-primary hover:shadow-2xl transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 group"
+                                   >
+                                      <svg className="w-6 h-6 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                      {t('bookSession')}
+                                   </button>
+                                   <div className="flex gap-4 bg-slate-50 rounded-[24px] p-2 border border-slate-100">
+                                      <div className="flex flex-col justify-center px-6">
+                                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Format</span>
+                                         <span className="text-xs font-bold text-brand-dark">{mentor.mentorshipStyle}</span>
+                                      </div>
+                                      <div className="w-px h-8 bg-slate-200 self-center"></div>
+                                      <div className="flex flex-col justify-center px-6">
+                                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Languages</span>
+                                         <span className="text-xs font-bold text-brand-dark">{mentor.languages.join(', ')}</span>
+                                      </div>
+                                   </div>
+                                </div>
+                             </div>
                           </div>
-                       )}
+                       </div>
                     </div>
-                    
-                    <h3 className="text-xl font-bold text-slate-800 mb-6">{mentor.name}</h3>
-                    
-                    <button className="w-full py-3 rounded-xl border border-slate-800 text-slate-800 font-bold hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-2 group">
-                       <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.013 8.013 0 01-5.626-2.32l-5.118 1.134 1.956-5.441A8.013 8.013 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z" /></svg>
-                       {t('bookSession')}
-                    </button>
+                 ))
+              ) : (
+                 <div className="col-span-full py-48 text-center text-slate-300 bg-white rounded-[60px] border border-dashed border-slate-200">
+                    <div className="text-8xl mb-10 grayscale opacity-20">🔭</div>
+                    <p className="text-2xl font-black text-slate-400">{t('noMentorsFound')}</p>
+                    <button onClick={() => setSearchQuery('')} className="mt-8 text-brand-primary font-black hover:underline text-lg uppercase tracking-widest">Clear Search Filters</button>
                  </div>
-              ))
-           ) : (
-              <div className="col-span-full py-12 text-center text-slate-400">
-                 <div className="text-4xl mb-4">🔍</div>
-                 <p>{t('noMentorsFound')}</p>
-              </div>
-           )}
+              )}
+           </div>
         </div>
 
+        {/* Global CTA */}
+        <div className="mt-32 p-20 bg-brand-dark rounded-[64px] text-white flex flex-col lg:flex-row items-center justify-between gap-16 overflow-hidden relative border border-white/5">
+           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[120px]"></div>
+           <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-brand-accent/5 rounded-full translate-y-1/2 -translate-x-1/2 blur-[100px]"></div>
+           
+           <div className="relative z-10 max-w-3xl text-center lg:text-start">
+              <h3 className="text-5xl font-heading font-black mb-8 leading-tight">Empower the District.<br/><span className="text-brand-primary">Apply as a Mentor.</span></h3>
+              <p className="text-slate-400 text-xl font-medium leading-relaxed">
+                 We are always looking for visionary leaders to join our premium mentorship network. Share your specialized expertise and help shape the next generation of digital industrial giants.
+              </p>
+           </div>
+           <div className="relative z-10 shrink-0">
+              <button className="px-16 py-7 bg-brand-accent text-brand-dark font-black text-xl rounded-[28px] hover:scale-105 transition-transform shadow-[0_25px_60px_rgba(247,198,0,0.35)] hover:brightness-110 active:scale-95 uppercase tracking-widest">
+                 Apply to Mentor
+              </button>
+           </div>
+        </div>
       </div>
+
+      {selectedMentor && (
+         <MentorBookingModal 
+            mentor={selectedMentor} 
+            onClose={() => { setSelectedMentor(null); setPreselectedDate(null); }} 
+            initialDate={preselectedDate || undefined}
+         />
+      )}
     </div>
   );
 };

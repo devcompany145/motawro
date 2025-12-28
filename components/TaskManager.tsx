@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 type ViewMode = 'daily' | 'monthly' | 'yearly';
+type ReminderRange = 'week' | 'month';
 
 interface Task {
   id: string;
@@ -34,6 +36,8 @@ const TaskManager: React.FC = () => {
   const [newEvent, setNewEvent] = useState('');
   const [viewDate, setViewDate] = useState(new Date()); 
   const [selectedDate, setSelectedDate] = useState(new Date()); 
+  const [monthlySearchQuery, setMonthlySearchQuery] = useState('');
+  const [reminderRange, setReminderRange] = useState<ReminderRange>('week');
 
   // Yearly State
   const [annualGoals, setAnnualGoals] = useState<Goal[]>([]);
@@ -126,6 +130,14 @@ const TaskManager: React.FC = () => {
     setViewDate(newDate);
   };
 
+  const handleJumpToDate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const jumpDate = new Date(e.target.value);
+    if (!isNaN(jumpDate.getTime())) {
+      setViewDate(new Date(jumpDate.getFullYear(), jumpDate.getMonth(), 1));
+      setSelectedDate(jumpDate);
+    }
+  };
+
   const addMonthlyEvent = () => {
     if (!newEvent.trim()) return;
     setMonthlyEvents([...monthlyEvents, { id: Date.now().toString(), text: newEvent, date: formatDateKey(selectedDate) }]);
@@ -165,25 +177,37 @@ const TaskManager: React.FC = () => {
 
   const calendarDays = getDaysInMonth(viewDate);
   const selectedDateKey = formatDateKey(selectedDate);
-  const eventsForSelectedDay = monthlyEvents.filter(e => e.date === selectedDateKey);
-  const dailyProgress = dailyTasks.length > 0 
-    ? Math.round((dailyTasks.filter(t => t.completed).length / dailyTasks.length) * 100) 
-    : 0;
+  
+  // Filter side panel events by date AND keyword
+  const eventsInView = useMemo(() => {
+    if (monthlySearchQuery.trim()) {
+      return monthlyEvents.filter(e => 
+        e.text.toLowerCase().includes(monthlySearchQuery.toLowerCase())
+      ).sort((a, b) => a.date.localeCompare(b.date));
+    }
+    return monthlyEvents.filter(e => e.date === selectedDateKey);
+  }, [monthlyEvents, selectedDateKey, monthlySearchQuery]);
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Enhanced Reminders logic with range filtering
   const upcomingEvents = useMemo(() => {
     const today = new Date();
     today.setHours(0,0,0,0);
     const limit = new Date(today);
-    limit.setDate(today.getDate() + 7);
+    
+    if (reminderRange === 'week') {
+      limit.setDate(today.getDate() + 7);
+    } else {
+      limit.setMonth(today.getMonth() + 1);
+    }
 
     return monthlyEvents.filter(event => {
       const [y, m, d] = event.date.split('-').map(Number);
       const eventDate = new Date(y, m - 1, d);
       return eventDate >= today && eventDate <= limit;
     }).sort((a, b) => a.date.localeCompare(b.date));
-  }, [monthlyEvents]);
+  }, [monthlyEvents, reminderRange]);
 
   const getRelativeTime = (dateStr: string) => {
     const today = new Date();
@@ -199,11 +223,15 @@ const TaskManager: React.FC = () => {
     return t('dueIn', { days: diffDays.toString() });
   };
 
+  const dailyProgress = dailyTasks.length > 0 
+    ? Math.round((dailyTasks.filter(t => t.completed).length / dailyTasks.length) * 100) 
+    : 0;
+
   return (
     <div className="h-full min-h-[600px] bg-white rounded-[32px] shadow-card border border-slate-100 overflow-hidden flex flex-col animate-fade-in">
       
       {/* Header */}
-      <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-white">
+      <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 bg-white shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/10">
             ✅
@@ -311,14 +339,34 @@ const TaskManager: React.FC = () => {
         {viewMode === 'monthly' && (
            <div className="space-y-8 animate-scale-in max-w-6xl mx-auto">
               
-              {upcomingEvents.length > 0 && (
-                 <div className="mb-8 bg-orange-50 border border-orange-100 rounded-2xl p-6 shadow-sm animate-slide-up">
-                    <div className="flex items-center gap-3 mb-4">
-                       <div className="p-2 bg-white rounded-xl text-orange-500 text-xl shadow-sm">
+              {/* Upcoming Reminders with Filter */}
+              <div className="mb-8 bg-orange-50 border border-orange-100 rounded-2xl p-6 shadow-sm animate-slide-up">
+                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2.5 bg-white rounded-xl text-orange-500 text-xl shadow-sm border border-orange-100">
                           🔔
                        </div>
-                       <h3 className="font-bold text-brand-primary">{t('upcomingReminders')}</h3>
+                       <div>
+                          <h3 className="font-bold text-brand-primary">{t('upcomingReminders')}</h3>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Filtered by range</p>
+                       </div>
                     </div>
+                    <div className="flex bg-white/50 p-1 rounded-xl border border-orange-100">
+                       <button 
+                          onClick={() => setReminderRange('week')}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${reminderRange === 'week' ? 'bg-orange-500 text-white shadow-sm' : 'text-orange-400 hover:bg-white'}`}
+                       >
+                          7 Days
+                       </button>
+                       <button 
+                          onClick={() => setReminderRange('month')}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${reminderRange === 'month' ? 'bg-orange-500 text-white shadow-sm' : 'text-orange-400 hover:bg-white'}`}
+                       >
+                          30 Days
+                       </button>
+                    </div>
+                 </div>
+                 {upcomingEvents.length > 0 ? (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                        {upcomingEvents.map(event => (
                           <div key={event.id} className="bg-white p-4 rounded-xl border border-orange-100 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
@@ -332,18 +380,34 @@ const TaskManager: React.FC = () => {
                           </div>
                        ))}
                     </div>
-                 </div>
-              )}
+                 ) : (
+                    <div className="text-center py-6 text-orange-300 font-medium text-sm italic">
+                       No upcoming events in this period
+                    </div>
+                 )}
+              </div>
 
               <div className="flex flex-col lg:flex-row gap-8">
                   {/* Calendar Grid */}
-                  <div className="flex-1 bg-white rounded-[24px] p-6 border border-slate-200 shadow-sm">
-                      <div className="flex items-center justify-between mb-6">
-                        <button onClick={() => changeMonth(-1)} className="p-3 hover:bg-slate-50 rounded-full transition-colors border border-slate-100">◀</button>
-                        <h2 className="text-2xl font-bold text-brand-primary font-heading">
-                            {viewDate.toLocaleDateString(language, { month: 'long', year: 'numeric' })}
-                        </h2>
-                        <button onClick={() => changeMonth(1)} className="p-3 hover:bg-slate-50 rounded-full transition-colors border border-slate-100">▶</button>
+                  <div className="flex-1 bg-white rounded-[24px] p-6 border border-slate-200 shadow-sm flex flex-col">
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+                        <div className="flex items-center gap-2">
+                           <button onClick={() => changeMonth(-1)} className="p-3 hover:bg-slate-50 rounded-full transition-colors border border-slate-100">◀</button>
+                           <h2 className="text-2xl font-bold text-brand-primary font-heading px-4 min-w-[180px] text-center">
+                               {viewDate.toLocaleDateString(language, { month: 'long', year: 'numeric' })}
+                           </h2>
+                           <button onClick={() => changeMonth(1)} className="p-3 hover:bg-slate-50 rounded-full transition-colors border border-slate-100">▶</button>
+                        </div>
+                        
+                        {/* Jump to Date Filter */}
+                        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase px-2">Jump to:</label>
+                           <input 
+                              type="date" 
+                              onChange={handleJumpToDate}
+                              className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-brand-primary outline-none focus:ring-2 focus:ring-blue-100"
+                           />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-7 gap-2 text-center mb-4">
@@ -364,7 +428,7 @@ const TaskManager: React.FC = () => {
                             return (
                                 <button
                                   key={dateKey}
-                                  onClick={() => setSelectedDate(date)}
+                                  onClick={() => { setSelectedDate(date); setMonthlySearchQuery(''); }}
                                   className={`aspect-square rounded-2xl relative flex flex-col items-center justify-center transition-all duration-200 ${
                                       isSelected 
                                         ? 'bg-brand-primary text-white shadow-lg shadow-blue-900/20 scale-105 z-10' 
@@ -381,44 +445,73 @@ const TaskManager: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Side Panel: Events */}
-                  <div className="w-full lg:w-96 bg-white rounded-[24px] p-6 border border-slate-200 shadow-sm h-fit">
-                      <h3 className="text-lg font-bold text-brand-primary mb-6 flex items-center gap-2">
-                          <span className="text-blue-500">📅</span> {selectedDate.toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}
-                      </h3>
-                      
-                      <div className="flex gap-2 mb-6">
-                        <input 
-                            type="text" 
-                            value={newEvent}
-                            onChange={(e) => setNewEvent(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && addMonthlyEvent()}
-                            placeholder={t('addEventPlaceholder')}
-                            className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-medium"
-                        />
-                        <button 
-                          onClick={addMonthlyEvent}
-                          className="px-4 py-3 bg-brand-primary hover:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-all"
-                        >
-                          +
-                        </button>
+                  {/* Side Panel: Events & Filter */}
+                  <div className="w-full lg:w-96 bg-white rounded-[24px] p-6 border border-slate-200 shadow-sm h-fit flex flex-col">
+                      <div className="mb-6">
+                        <h3 className="text-lg font-bold text-brand-primary mb-2 flex items-center gap-2">
+                           <span className="text-blue-500">📅</span> 
+                           {monthlySearchQuery ? 'Filter Results' : selectedDate.toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}
+                        </h3>
+                        
+                        {/* Event Filter Keyword Search */}
+                        <div className="relative mt-4">
+                           <input 
+                              type="text" 
+                              value={monthlySearchQuery}
+                              onChange={(e) => setMonthlySearchQuery(e.target.value)}
+                              placeholder="Filter by keyword..."
+                              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                           />
+                           <svg className="absolute left-3 top-3 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                           </svg>
+                           {monthlySearchQuery && (
+                              <button onClick={() => setMonthlySearchQuery('')} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+                           )}
+                        </div>
                       </div>
+                      
+                      {!monthlySearchQuery && (
+                        <div className="flex gap-2 mb-6">
+                           <input 
+                               type="text" 
+                               value={newEvent}
+                               onChange={(e) => setNewEvent(e.target.value)}
+                               onKeyPress={(e) => e.key === 'Enter' && addMonthlyEvent()}
+                               placeholder={t('addEventPlaceholder')}
+                               className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-medium"
+                           />
+                           <button 
+                             onClick={addMonthlyEvent}
+                             className="px-4 py-3 bg-brand-primary hover:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-all"
+                           >
+                             +
+                           </button>
+                        </div>
+                      )}
 
-                      <div className="space-y-3">
-                          {eventsForSelectedDay.length === 0 && (
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                          {eventsInView.length === 0 && (
                             <div className="text-center py-10 text-slate-400 text-sm italic border-2 border-dashed border-slate-100 rounded-xl">
-                                {t('noEvents')}
+                                {monthlySearchQuery ? 'No matches found' : t('noEvents')}
                             </div>
                           )}
-                          {eventsForSelectedDay.map(event => (
-                            <div key={event.id} className="group flex items-center justify-between bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                <p className="font-bold text-brand-primary text-sm">{event.text}</p>
-                                <button 
-                                  onClick={() => deleteEvent(event.id)}
-                                  className="text-slate-400 hover:text-red-500 transition-colors p-1"
-                                >
-                                  ✕
-                                </button>
+                          {eventsInView.map(event => (
+                            <div key={event.id} className="group flex flex-col bg-blue-50 p-4 rounded-xl border border-blue-100 hover:border-blue-200 transition-all">
+                                <div className="flex items-center justify-between">
+                                   <p className="font-bold text-brand-primary text-sm leading-tight flex-1">{event.text}</p>
+                                   <button 
+                                     onClick={() => deleteEvent(event.id)}
+                                     className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                                   >
+                                     ✕
+                                   </button>
+                                </div>
+                                {monthlySearchQuery && (
+                                   <div className="mt-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-0.5 rounded w-fit">
+                                      {event.date}
+                                   </div>
+                                )}
                             </div>
                           ))}
                       </div>

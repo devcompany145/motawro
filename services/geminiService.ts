@@ -4,57 +4,62 @@ import { getSystemInstruction } from '../constants';
 import { Business, BusinessGenome, MatchResult } from "../types";
 
 // Initialize Gemini Client
+// Fix: Use named parameter for apiKey as per guidelines
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Generates strategic business advice using Gemini
-export const generateBusinessAdvice = async (query: string, chatHistory: string[], language: string = 'ar'): Promise<string> => {
+/**
+ * Generates strategic business advice using Gemini with streaming support.
+ */
+export async function* streamBusinessAdvice(query: string, chatHistory: string[], language: string = 'ar') {
   try {
     const model = 'gemini-3-flash-preview';
-    
-    let prompt = '';
-    if (language === 'ar') {
-       prompt = `تاريخ المحادثة: ${chatHistory.join('\n')}\nسؤال المستخدم الحالي: ${query}\nقدم إجابة مفيدة وموجزة.`;
-    } else if (language === 'es') {
-       prompt = `Historial de chat: ${chatHistory.join('\n')}\nPregunta actual: ${query}\nProporcione una respuesta concisa.`;
-    } else {
-      prompt = `Chat History: ${chatHistory.join('\n')}\nCurrent Question: ${query}\nProvide a helpful, concise answer.`;
-    }
+    // Fix: Using a plain string for contents for simple text tasks
+    const prompt = `${getSystemInstruction(language)}\n\nHistory:\n${chatHistory.join('\n')}\n\nUser Question: ${query}`;
 
-    const response = await ai.models.generateContent({
+    const responseStream = await ai.models.generateContentStream({
       model: model,
       contents: prompt,
       config: {
-        systemInstruction: getSystemInstruction(language),
         temperature: 0.7,
       }
     });
 
-    return response.text || "Error";
+    for await (const chunk of responseStream) {
+      // Fix: Access chunk.text property directly
+      if (chunk.text) yield chunk.text;
+    }
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "Error connecting to AI service.";
+    console.error("Gemini Streaming Error:", error);
+    yield "Error connecting to AI service.";
   }
-};
+}
 
 /**
- * Generates a comprehensive business strategy plan.
- * Uses Gemini 3 Pro for high-level reasoning.
+ * Generates a comprehensive, reasoned business strategy plan.
+ * Uses Gemini 3 Pro for high-level reasoning with thinking budget.
  */
 export const generateStructuredStrategy = async (profile: any, language: string = 'ar'): Promise<string> => {
   try {
     const model = 'gemini-3-pro-preview';
+    const servicesText = profile.servicesOffered?.length > 0 
+      ? `SERVICES CURRENTLY PROVIDED: ${profile.servicesOffered.join(', ')}` 
+      : 'SERVICES: General industry-aligned offerings';
+
     const prompt = `
-      As a Senior Business Architect, create a professional strategy plan for:
-      BUSINESS CONTEXT: ${JSON.stringify(profile)}
+      You are a World-Class Business Architect. Create a hyper-professional 12-month digital transformation strategy for:
+      BUSINESS PROFILE: 
+      - Industry: ${profile.industry}
+      - ${servicesText}
+      - Core Objective: ${profile.coreGoal}
       
-      The plan must include:
-      1. Executive Summary
-      2. 12-Month Roadmap (divided into quarters)
-      3. SWOT Analysis (Detailed)
-      4. Digital Transformation Actions
-      5. Risk Mitigation Strategy
+      Requirements:
+      1. Executive Vision: A bold, 2-sentence vision statement.
+      2. 12-Month Roadmap: Quarterly milestones (Q1-Q4) with specific KPIs for the services provided.
+      3. Ecosystem Synergy: How to leverage neighbors in the Digital District (Riyadh) based on the current service portfolio.
+      4. Risk & Mitigation: Top 3 strategic risks.
+      5. Resource Allocation: Budget and headcount suggestions.
       
-      Format the output in high-quality Markdown. 
+      Output Format: High-quality Markdown with professional business headers.
       Language: ${language === 'ar' ? 'Arabic' : 'English'}
     `;
 
@@ -62,29 +67,29 @@ export const generateStructuredStrategy = async (profile: any, language: string 
       model: model,
       contents: prompt,
       config: {
-        systemInstruction: "You are an elite business consultant. Your strategies are actionable, innovative, and data-driven.",
+        systemInstruction: "You are an elite management consultant from a top-tier firm. Your tone is authoritative, insightful, and strategic. Focus on scaling the specific services provided by the user.",
+        // Fix: Added appropriate thinkingBudget for gemini-3-pro-preview
         thinkingConfig: { thinkingBudget: 16000 },
-        temperature: 0.4, // Lower temperature for more structured, professional output
+        temperature: 0.4,
       }
     });
 
+    // Fix: Access response.text property directly
     return response.text || "";
   } catch (error) {
     console.error("Strategy Generation Error:", error);
-    return "Failed to generate strategy. Please try again.";
+    return "Failed to construct strategy blueprint.";
   }
 };
 
-// ... (Rest of existing matching and map grounding functions)
+/**
+ * Generates business matches using structured JSON response.
+ */
 export const generateBusinessMatches = async (myProfile: BusinessGenome, availableBusinesses: Business[], language: string = 'ar'): Promise<MatchResult[]> => {
   try {
     const model = 'gemini-3-flash-preview';
-    const candidates = availableBusinesses.map(b => ({
-      id: b.id,
-      name: b.name,
-      genome: b.genomeProfile
-    }));
-    const prompt = `Analyze synergy between: USER: ${JSON.stringify(myProfile)} and CANDIDATES: ${JSON.stringify(candidates)}. Return top 6 matches in JSON. Language: ${language}`;
+    const candidates = availableBusinesses.map(b => ({ id: b.id, name: b.name, genome: b.genomeProfile }));
+    const prompt = `Analyze synergy between: USER: ${JSON.stringify(myProfile)} and CANDIDATES: ${JSON.stringify(candidates)}. Return top 6 matches in JSON.`;
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
@@ -96,64 +101,65 @@ export const generateBusinessMatches = async (myProfile: BusinessGenome, availab
             type: Type.OBJECT,
             properties: {
               companyId: { type: Type.STRING },
-              score: { type: Type.NUMBER },
+              score: { type: Number },
               matchReason: { type: Type.STRING },
               sharedInterests: { type: Type.ARRAY, items: { type: Type.STRING } },
-              collaborationOpportunity: { type: Type.STRING },
-              analysisPoints: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { factor: { type: Type.STRING }, description: { type: Type.STRING } } } }
+              collaborationOpportunity: { type: Type.STRING }
             },
-            required: ['companyId', 'score', 'matchReason', 'collaborationOpportunity']
+            required: ["companyId", "score", "matchReason", "sharedInterests", "collaborationOpportunity"]
           }
         }
       }
     });
+    // Fix: Access response.text property directly
     return JSON.parse(response.text || "[]") as MatchResult[];
   } catch (error) { return []; }
 };
 
+/**
+ * Retrieves regional map insights with Google Maps grounding.
+ */
 export const getRegionalMapInsights = async (language: string = 'ar'): Promise<{text: string, links: any[]}> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: "What are the major business hubs near Riyadh Digital District? Provide a summary.",
+      contents: "Riyadh Digital District business hubs and networking spots. Coordinates: 24.7136, 46.6753.",
       config: {
         tools: [{ googleMaps: {} }],
         toolConfig: { retrievalConfig: { latLng: { latitude: 24.7136, longitude: 46.6753 } } }
       },
     });
+    // Fix: Extract grounding metadata as per guidelines
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const links = groundingChunks.filter((chunk: any) => chunk.maps?.uri).map((chunk: any) => ({ title: chunk.maps.title, url: chunk.maps.uri }));
+    // Fix: Access response.text property directly
     return { text: response.text || "", links };
   } catch (error) { return { text: "Error", links: [] }; }
 };
 
-export const searchBusinessesWithAI = async (query: string, businesses: Business[], language: string = 'ar'): Promise<any> => {
-  try {
-    const prompt = `Search analysis for: "${query}". Data: ${JSON.stringify(businesses)}. Return JSON: {"ids": [], "filters": {}}`;
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
-    });
-    return JSON.parse(response.text || "{}");
-  } catch (error) { return { ids: [], filters: {} }; }
-};
-
+/**
+ * Recommends a consulting service category with structured JSON.
+ */
 export const recommendConsultingService = async (query: string, language: string = 'ar'): Promise<{recommendedId: string, reasoning: string}> => {
   try {
-    const prompt = `Recommend consulting for: "${query}". Return JSON: {"recommendedId": "", "reasoning": ""}`;
+    const prompt = `Based on the query: "${query}", recommend the best consulting service category.`;
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
+      config: { 
         responseMimeType: "application/json",
+        // Fix: Added responseSchema for more robust JSON output
         responseSchema: {
           type: Type.OBJECT,
-          properties: { recommendedId: { type: Type.STRING }, reasoning: { type: Type.STRING } },
+          properties: {
+            recommendedId: { type: Type.STRING, description: "ID of the recommended service category" },
+            reasoning: { type: Type.STRING, description: "Professional rationale for the recommendation" }
+          },
           required: ["recommendedId", "reasoning"]
         }
-      },
+      }
     });
+    // Fix: Access response.text property directly
     return JSON.parse(response.text || "{}");
   } catch (error) { return { recommendedId: "", reasoning: "" }; }
 };
