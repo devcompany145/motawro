@@ -34,33 +34,20 @@ interface OfficeMapProps {
 
 const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredOut, lod, onSelect, onHover, t, mapMode }: any) => {
   const isHighLod = lod === 'high';
-  const isHeatmap = mapMode === 'heatmap';
   const isDarkMode = mapMode !== 'standard';
 
   const baseDepth = 40;
-  // Dynamic lift calculation for 3D depth
+  // Calculate dynamic lift and scale for a premium feel
   const liftAmount = isSelected ? 35 : isHovered ? 15 : 0;
   
-  // Heatmap Logic: Intensity based on active visitors (0-100 scale)
-  const activityIntensity = Math.min((business.activeVisitors || 0) / 100, 1);
-  
-  const getHeatmapColor = () => {
-    if (!business.isOccupied) return 'rgba(30, 41, 59, 0.4)';
-    if (activityIntensity > 0.8) return '#F7C600'; // High activity: Yellow/Gold
-    if (activityIntensity > 0.4) return '#2D89E5'; // Medium activity: Tech Blue
-    return '#1E293B'; // Low activity: Industrial Graphite
-  };
-
   const roofStyle = {
-    backgroundColor: isHeatmap ? getHeatmapColor() : (business.isOccupied ? (isDarkMode ? '#1E293B' : '#0F172A') : '#FFFFFF'),
-    border: isSelected ? '4px solid #2D89E5' : isHovered ? '2px solid #2D89E5' : isHeatmap ? `1px solid rgba(255,255,255,${activityIntensity * 0.5})` : '1px solid rgba(0,0,0,0.1)',
+    backgroundColor: business.isOccupied ? (isDarkMode ? '#1E293B' : '#0F172A') : '#FFFFFF',
+    border: isSelected ? '4px solid #2D89E5' : isHovered ? '2px solid #2D89E5' : '1px solid rgba(0,0,0,0.1)',
     boxShadow: isSelected 
       ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' 
-      : isHeatmap && business.isOccupied
-        ? `0 0 ${20 + (activityIntensity * 40)}px ${getHeatmapColor()}${Math.floor(activityIntensity * 99)}`
-        : isHovered 
-          ? '0 15px 30px -10px rgba(0, 0, 0, 0.3)' 
-          : 'none',
+      : isHovered 
+        ? '0 15px 30px -10px rgba(0, 0, 0, 0.3)' 
+        : 'none',
     opacity: isFilteredOut ? 0.2 : 1,
     transition: 'all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)'
   };
@@ -70,29 +57,17 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
       onClick={(e) => { if (!isFilteredOut) { e.stopPropagation(); onSelect(business); } }}
       onMouseEnter={() => !isFilteredOut && onHover(business.id)}
       onMouseLeave={() => onHover(null)}
-      className={`relative w-full h-full preserve-3d transition-all duration-500 ease-out transform
+      className={`relative w-full h-full preserve-3d transition-all duration-500 ease-out 
         ${isFilteredOut ? 'cursor-default grayscale pointer-events-none' : 'cursor-pointer'}
-        ${isHovered ? 'scale-105 -translate-y-1' : 'scale-100 translate-y-0'}
-        ${isSelected ? 'scale-110 -translate-y-2' : ''}
+        ${isHovered ? 'scale-105' : 'scale-100'}
+        ${isSelected ? 'scale-110' : ''}
       `}
       style={{ transform: `translateZ(${baseDepth + liftAmount}px)` }}
     >
-        {/* Floor Aura for Heatmap */}
-        {isHeatmap && business.isOccupied && !isFilteredOut && (
-          <div 
-            className="absolute -inset-8 rounded-full blur-2xl opacity-20 pointer-events-none transition-all duration-1000"
-            style={{ 
-              backgroundColor: getHeatmapColor(),
-              transform: 'translateZ(-20px)',
-              animation: `pulse ${3 - (activityIntensity * 2)}s infinite alternate` 
-            }}
-          />
-        )}
-
         {business.isOccupied ? (
             <div className="absolute inset-0 rounded flex flex-col items-center justify-center p-2 text-center backface-hidden z-20 transition-all duration-500" style={roofStyle}>
                 {/* Logo and Name Priority Display */}
-                {business.logoUrl && (isHighLod || isSelected) && !isHeatmap && (
+                {business.logoUrl && (isHighLod || isSelected) && (
                   <div className="flex flex-col items-center justify-center w-full h-full overflow-hidden animate-fade-in space-y-1.5">
                     <div className="bg-white p-1 rounded-lg shadow-md border border-slate-100 shrink-0">
                       <img src={business.logoUrl} alt="" className="w-10 h-10 object-contain rounded" />
@@ -102,19 +77,11 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
                     </span>
                   </div>
                 )}
-                {isHeatmap && (
-                  <div className="flex flex-col items-center justify-center">
-                    <span className={`text-sm font-black transition-colors ${activityIntensity > 0.5 ? 'text-white' : 'text-slate-400'}`}>
-                      {business.activeVisitors || 0}
-                    </span>
-                    <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Activity</span>
-                  </div>
-                )}
                 {isSelected && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-primary text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-lg z-30 ring-2 ring-white/20">Active Unit</div>}
             </div>
         ) : (
             <div className={`absolute inset-0 rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-white/20 transition-opacity ${isFilteredOut ? 'opacity-20' : 'opacity-100'}`} style={roofStyle}>
-                {!isHeatmap && <span className="text-xl text-slate-300 transition-transform duration-500 group-hover:scale-125">+</span>}
+                <span className="text-xl text-slate-300 transition-transform duration-500 group-hover:scale-125">+</span>
             </div>
         )}
     </div>
@@ -122,7 +89,7 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
 });
 
 const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFavorite, onRentClick, onAddBusiness, onUpdateBusiness }) => {
-  const { t, language, dir } = useLanguage();
+  const { t, language } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -135,6 +102,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
   const [searchQuery, setSearchQuery] = useState('');
   const [isWebSearch, setIsWebSearch] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'occupied' | 'available'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('name_asc');
 
   // Defined Categories
@@ -148,7 +116,9 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
     let result = businesses.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = filterCategory === 'all' || b.category === filterCategory;
-      return matchesSearch && matchesCategory;
+      const matchesStatus = filterStatus === 'all' || 
+          (filterStatus === 'occupied' ? b.isOccupied : !b.isOccupied);
+      return matchesSearch && matchesCategory && matchesStatus;
     });
 
     return result.sort((a, b) => {
@@ -157,7 +127,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
       if (sortMode === 'visitors_desc') return (b.activeVisitors || 0) - (a.activeVisitors || 0);
       return 0;
     });
-  }, [businesses, searchQuery, filterCategory, sortMode, language]);
+  }, [businesses, searchQuery, filterCategory, filterStatus, sortMode, language]);
 
   const currentLOD = useMemo(() => viewState.zoom < 0.5 ? 'low' : viewState.zoom < 1.2 ? 'medium' : 'high', [viewState.zoom]);
 
@@ -194,12 +164,6 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
     setLoadingInsights(false);
   };
 
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setFilterCategory('all');
-    setSortMode('name_asc');
-  };
-
   const panToBusiness = (business: Business) => {
     const center = getCellCenter(business.gridPosition);
     setSelectedBusinessId(business.id);
@@ -226,7 +190,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
 
   return (
     <div 
-      className={`w-full h-full relative overflow-hidden transition-colors duration-1000 cursor-grab active:cursor-grabbing select-none ${mapMode === 'standard' ? 'bg-slate-900' : 'bg-brand-dark'}`}
+      className="w-full h-full relative overflow-hidden bg-slate-900 cursor-grab active:cursor-grabbing select-none"
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -241,13 +205,13 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                  onClick={() => setIsWebSearch(false)}
                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!isWebSearch ? 'bg-brand-primary text-white shadow-lg' : 'bg-white/5 text-white/50 hover:text-white'}`}
               >
-                 District
+                 Local
               </button>
               <button 
                  onClick={() => setIsWebSearch(true)}
                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isWebSearch ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/50 hover:text-white'}`}
               >
-                 Global
+                 Web
               </button>
            </div>
 
@@ -272,19 +236,13 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
            </div>
 
            {!isWebSearch && (
-              <div className="grid grid-cols-1 gap-2 mt-3 animate-fade-in">
+              <div className="grid grid-cols-1 gap-2 mt-3">
                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center px-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('categories')}</label>
-                      {filterCategory !== 'all' && (
-                        <button onClick={() => setFilterCategory('all')} className="text-[9px] font-black text-brand-primary uppercase hover:underline">Reset</button>
-                      )}
-                    </div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">{t('categories')}</label>
                     <select 
                        value={filterCategory}
                        onChange={(e) => setFilterCategory(e.target.value)}
-                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none cursor-pointer hover:bg-white/10 appearance-none shadow-inner"
-                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: dir === 'rtl' ? 'left 0.5rem center' : 'right 0.5rem center', backgroundSize: '1em' }}
+                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer hover:bg-white/10"
                     >
                        <option value="all" className="bg-slate-800 text-white">{t('allCategories')}</option>
                        {categories.map(c => <option key={c} value={c} className="bg-slate-800 text-white">{t(`cat_${c}`)}</option>)}
@@ -296,20 +254,12 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                     <select 
                        value={sortMode}
                        onChange={(e) => setSortMode(e.target.value as SortMode)}
-                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none cursor-pointer hover:bg-white/10 appearance-none shadow-inner"
-                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6 9 12 15 18 9\'%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: dir === 'rtl' ? 'left 0.5rem center' : 'right 0.5rem center', backgroundSize: '1em' }}
+                       className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer hover:bg-white/10"
                     >
                        <option value="name_asc" className="bg-slate-800 text-white">{t('sortNameAsc')}</option>
                        <option value="name_desc" className="bg-slate-800 text-white">{t('sortNameDesc')}</option>
                        <option value="visitors_desc" className="bg-slate-800 text-white">{t('sortVisitors')}</option>
                     </select>
-                 </div>
-
-                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{filteredBusinesses.length} {t('results')}</span>
-                    {(searchQuery || filterCategory !== 'all') && (
-                       <button onClick={handleResetFilters} className="text-[10px] font-black text-slate-400 hover:text-white uppercase tracking-widest transition-colors">Clear All</button>
-                    )}
                  </div>
               </div>
            )}
@@ -349,14 +299,9 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
         }}
       >
         <div 
-          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[10px] rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.5)] transition-all duration-1000 ${mapMode === 'standard' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-900 border-indigo-900/50'}`}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800/50 border-[10px] border-slate-700/50 rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.5)]"
           style={{ width: CONTAINER_SIZE, height: CONTAINER_SIZE }}
         >
-          {/* Tech Grid for Dark Modes */}
-          {mapMode !== 'standard' && (
-            <div className="absolute inset-0 bg-grid-tech-dark opacity-10 rounded-[30px]" />
-          )}
-
           {/* Blocks */}
           {businesses.map(business => {
             const center = getCellCenter(business.gridPosition);
