@@ -14,7 +14,7 @@ declare global {
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
-  const { t, dir } = useLanguage();
+  const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,20 +88,14 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-brand-dark/95 backdrop-blur-xl p-4 animate-fade-in overflow-hidden">
-      
-      {/* Background HUD Decor */}
       <div className="absolute inset-0 pointer-events-none opacity-20">
          <div className="absolute top-10 left-10 w-20 h-20 border-t-2 border-l-2 border-brand-primary"></div>
          <div className="absolute top-10 right-10 w-20 h-20 border-t-2 border-r-2 border-brand-primary"></div>
          <div className="absolute bottom-10 left-10 w-20 h-20 border-b-2 border-l-2 border-brand-primary"></div>
          <div className="absolute bottom-10 right-10 w-20 h-20 border-b-2 border-r-2 border-brand-primary"></div>
-         <div className="absolute top-1/2 left-10 right-10 h-px bg-brand-primary/30"></div>
-         <div className="absolute left-1/2 top-10 bottom-10 w-px bg-brand-primary/30"></div>
       </div>
 
       <div className="relative w-full max-w-2xl bg-black rounded-[40px] overflow-hidden shadow-[0_0_100px_rgba(45,137,229,0.2)] border border-white/10 group">
-        
-        {/* Header HUD */}
         <div className="p-8 bg-brand-dark/80 backdrop-blur-md text-white flex justify-between items-center border-b border-white/5 relative z-10">
           <div className="flex items-center gap-6">
              <div className="relative">
@@ -109,9 +103,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
                    <svg className="w-8 h-8 text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1l-3 3h2v5h2V8h2l-3-3V4zM4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7" />
                    </svg>
-                </div>
-                <div className="absolute -top-1 -right-1 flex gap-1">
-                   <div className={`w-2 h-2 rounded-full ${status === 'LOCKED' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-brand-primary animate-ping'}`}></div>
                 </div>
              </div>
              <div>
@@ -127,7 +118,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
           </button>
         </div>
 
-        {/* Scanner HUD Viewport */}
         <div className="relative aspect-video bg-black overflow-hidden group">
           {error ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center text-white">
@@ -139,62 +129,25 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
             <>
               <video ref={videoRef} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${status === 'READY' ? 'opacity-0' : 'opacity-60'}`} />
               <canvas ref={canvasRef} className="hidden" />
-              
-              {/* Intelligent HUD Overlays */}
               <div className="absolute inset-0 pointer-events-none">
-                 {/* Scanning Square HUD */}
                  <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-72 h-72 relative">
-                        {/* Brackets */}
                         <div className={`absolute -top-4 -left-4 w-12 h-12 border-t-4 border-l-4 rounded-tl-3xl transition-all duration-500 ${status === 'LOCKED' ? 'border-green-500 scale-110 shadow-[0_0_20px_#22c55e]' : 'border-brand-primary'}`}></div>
                         <div className={`absolute -top-4 -right-4 w-12 h-12 border-t-4 border-r-4 rounded-tr-3xl transition-all duration-500 ${status === 'LOCKED' ? 'border-green-500 scale-110 shadow-[0_0_20px_#22c55e]' : 'border-brand-primary'}`}></div>
                         <div className={`absolute -bottom-4 -left-4 w-12 h-12 border-b-4 border-l-4 rounded-bl-3xl transition-all duration-500 ${status === 'LOCKED' ? 'border-green-500 scale-110 shadow-[0_0_20px_#22c55e]' : 'border-brand-primary'}`}></div>
                         <div className={`absolute -bottom-4 -right-4 w-12 h-12 border-b-4 border-r-4 rounded-br-3xl transition-all duration-500 ${status === 'LOCKED' ? 'border-green-500 scale-110 shadow-[0_0_20px_#22c55e]' : 'border-brand-primary'}`}></div>
-                        
-                        {/* Grid Pulse */}
-                        <div className="absolute inset-0 bg-[radial-gradient(#2d89e5_1px,transparent_1px)] [background-size:20px_20px] opacity-10"></div>
-                        
-                        {/* Scanning Vector */}
                         <div className={`absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-brand-primary to-transparent shadow-[0_0_20px_#2d89e5] ${status === 'SCANNING' ? 'animate-[scan-move_2.5s_ease-in-out_infinite]' : 'hidden'}`}></div>
-                        
-                        {/* Lock-on Visual */}
-                        {status === 'LOCKED' && (
-                           <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="w-full h-full border border-green-500/50 rounded-2xl animate-ping"></div>
-                              <div className="bg-green-500 text-brand-dark px-4 py-1 font-mono font-black text-xs uppercase tracking-tighter shadow-[0_0_20px_#22c55e]">TARGET LOCKED</div>
-                           </div>
-                        )}
                     </div>
-                 </div>
-
-                 {/* Lateral HUD Data */}
-                 <div className="absolute left-8 bottom-8 text-white font-mono text-[8px] space-y-1 opacity-60">
-                    <div>LAT: 24.7136</div>
-                    <div>LNG: 46.6753</div>
-                    <div>FREQ: 2.4GHZ</div>
-                    <div>ZOOM: AUTO</div>
-                 </div>
-
-                 <div className="absolute right-8 bottom-8 text-right text-white font-mono text-[8px] space-y-1 opacity-60">
-                    <div>ENCRYPTION: AES-256</div>
-                    <div>LINK: SECURE</div>
-                    <div>DISTRICT: SMART_HUD</div>
-                    <div>VER: 0.9.4-BETA</div>
                  </div>
               </div>
             </>
           )}
         </div>
 
-        {/* Footer HUD Bar */}
-        <div className="p-8 bg-brand-dark/95 border-t border-white/10 flex items-center justify-center gap-10">
-           <div className="flex flex-col items-center">
-              <div className="w-1 h-1 bg-brand-primary rounded-full mb-2 animate-bounce"></div>
-              <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{t('pointCamera')}</p>
-           </div>
+        <div className="p-8 bg-brand-dark/95 border-t border-white/10 flex items-center justify-center">
+           <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{t('pointCamera')}</p>
         </div>
       </div>
-      
       <style>{`
         @keyframes scan-move {
           0% { top: 0%; opacity: 0; }

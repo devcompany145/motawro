@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { recommendConsultingService } from '../services/geminiService';
 import AIConsultant from './AIConsultant';
 
 const ConsultingPage: React.FC = () => {

@@ -31,7 +31,7 @@ interface OfficeMapProps {
   onUpdateBusiness: (business: Business) => void;
 }
 
-const BuildingBlock = React.memo(({ business, isHovered, isSelected, lod, onSelect, onHover, t, mapMode, matchScore }: any) => {
+const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredOut, lod, onSelect, onHover, t, mapMode }: any) => {
   const isLowLod = lod === 'low';
   const isHighLod = lod === 'high';
   const isDarkMode = mapMode !== 'standard';
@@ -39,16 +39,13 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, lod, onSele
   const baseDepth = 40;
   const hoverLift = isHovered ? (isLowLod ? 5 : 30) : 0; 
 
-  // Helper to resolve glow color from Tailwind background class
   const getGlowColor = (colorClass: string) => {
-    if (!colorClass) return 'rgba(45, 137, 229, 0.4)';
-    if (colorClass.includes('cyan')) return 'rgba(6, 182, 212, 0.6)';
-    if (colorClass.includes('purple')) return 'rgba(168, 85, 247, 0.6)';
-    if (colorClass.includes('orange')) return 'rgba(249, 115, 22, 0.6)';
-    if (colorClass.includes('emerald')) return 'rgba(16, 185, 129, 0.6)';
-    if (colorClass.includes('blue')) return 'rgba(59, 130, 246, 0.6)';
-    if (colorClass.includes('indigo')) return 'rgba(79, 70, 229, 0.6)';
-    return 'rgba(45, 137, 229, 0.4)';
+    if (!colorClass) return 'rgba(45, 137, 229, 0.25)';
+    if (colorClass.includes('cyan')) return 'rgba(6, 182, 212, 0.3)';
+    if (colorClass.includes('purple')) return 'rgba(168, 85, 247, 0.3)';
+    if (colorClass.includes('orange')) return 'rgba(249, 115, 22, 0.3)';
+    if (colorClass.includes('emerald')) return 'rgba(16, 185, 129, 0.3)';
+    return 'rgba(45, 137, 229, 0.25)';
   };
 
   const glowColor = getGlowColor(business.color);
@@ -59,18 +56,19 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, lod, onSele
     boxShadow: isSelected 
       ? '0 0 30px rgba(45, 137, 229, 0.6)' 
       : isHovered 
-        ? `0 0 25px ${glowColor}` 
+        ? `0 0 20px ${glowColor}` 
         : 'none',
     transform: isSelected ? 'scale(1.05) translateZ(10px)' : 'scale(1)',
-    transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+    transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+    opacity: isFilteredOut ? 0.2 : 1
   };
 
   return (
     <div
-      onClick={(e) => { e.stopPropagation(); onSelect(business); }}
-      onMouseEnter={() => onHover(business.id)}
+      onClick={(e) => { if (!isFilteredOut) { e.stopPropagation(); onSelect(business); } }}
+      onMouseEnter={() => !isFilteredOut && onHover(business.id)}
       onMouseLeave={() => onHover(null)}
-      className="relative w-full h-full cursor-pointer preserve-3d transition-all duration-300"
+      className={`relative w-full h-full preserve-3d transition-all duration-300 ${isFilteredOut ? 'cursor-default grayscale pointer-events-none' : 'cursor-pointer'}`}
       style={{ transform: `translateZ(${baseDepth + hoverLift}px)` }}
     >
         {business.isOccupied ? (
@@ -84,7 +82,7 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, lod, onSele
                 {isSelected && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-primary text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-lg z-30">Active Unit</div>}
             </div>
         ) : (
-            <div className="absolute inset-0 rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-white/20">
+            <div className={`absolute inset-0 rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-white/20 transition-opacity ${isFilteredOut ? 'opacity-20' : 'opacity-100'}`} style={roofStyle}>
                 <span className="text-xl text-slate-300">+</span>
             </div>
         )}
@@ -93,7 +91,7 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, lod, onSele
 });
 
 const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFavorite, onRentClick, onAddBusiness, onUpdateBusiness }) => {
-  const { t, language, dir } = useLanguage();
+  const { t, language } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -103,20 +101,28 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
   const [isDragging, setIsDragging] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [showQRModal, setShowQRModal] = useState<string | null>(null);
+  
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'occupied' | 'available'>('all');
 
-  // Maps Grounding State
+  // The specific categories requested for filtering
+  const categories = ['TECHNOLOGY', 'ENGINEERING', 'TRANSPORT', 'EDUCATION', 'AVAILABLE'];
+  
   const [regionalInsights, setRegionalInsights] = useState<{text: string, links: any[]} | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
-  const currentLOD = useMemo(() => viewState.zoom < 0.5 ? 'low' : viewState.zoom < 1.2 ? 'medium' : 'high', [viewState.zoom]);
+  const filteredBusinesses = useMemo(() => {
+    return businesses.filter(b => {
+      const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = filterCategory === 'all' || b.category === filterCategory;
+      const matchesStatus = filterStatus === 'all' || 
+          (filterStatus === 'occupied' ? b.isOccupied : !b.isOccupied);
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [businesses, searchQuery, filterCategory, filterStatus]);
 
-  const filteredSearchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    return businesses.filter(b => 
-      b.isOccupied && b.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [businesses, searchQuery]);
+  const currentLOD = useMemo(() => viewState.zoom < 0.5 ? 'low' : viewState.zoom < 1.2 ? 'medium' : 'high', [viewState.zoom]);
 
   const handleWheel = (e: React.WheelEvent) => {
     setViewState(prev => ({
@@ -126,7 +132,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
   };
 
   const handleMouseDown = (e: React.MouseEvent) => { 
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input')) return;
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input') || (e.target as HTMLElement).closest('select')) return;
     setIsDragging(true);
   };
   
@@ -147,8 +153,6 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
     const center = getCellCenter(business.gridPosition);
     setSelectedBusinessId(business.id);
     setIsSidebarOpen(true);
-    setSearchQuery('');
-
     setViewState(prev => ({
       ...prev,
       panX: -(center.x - CONTAINER_SIZE/2) * 1.5,
@@ -169,6 +173,12 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
 
   const selectedBusiness = businesses.find(b => b.id === selectedBusinessId) || null;
 
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setFilterCategory('all');
+    setFilterStatus('all');
+  };
+
   return (
     <div className="flex flex-col lg:flex-row h-full gap-6 w-full relative">
        <div 
@@ -181,49 +191,78 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
           onMouseLeave={() => setIsDragging(false)}
           onWheel={handleWheel}
        >
-           {/* Control Panel */}
-           <div className="absolute top-6 left-6 z-20 flex flex-col gap-4 w-72 pointer-events-none">
-               <div className="bg-white/90 backdrop-blur shadow-card border border-white/50 rounded-2xl p-5 pointer-events-auto">
-                   <h2 className="text-xl font-bold text-brand-primary mb-1 font-heading">{t('businessMap')}</h2>
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">{t(mapMode + 'Mode')}</p>
+           {/* Enhanced Search & Control Panel */}
+           <div className="absolute top-6 left-6 z-20 flex flex-col gap-4 w-80 pointer-events-none">
+               <div className="bg-white/95 backdrop-blur shadow-elevated border border-slate-200 rounded-3xl p-6 pointer-events-auto">
+                   <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-xl font-black text-brand-dark font-heading leading-tight">{t('businessMap')}</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{filteredBusinesses.length} {t('results')}</p>
+                      </div>
+                      {(searchQuery || filterCategory !== 'all' || filterStatus !== 'all') && (
+                        <button 
+                          onClick={resetAllFilters}
+                          className="text-[10px] font-black text-brand-primary hover:underline uppercase"
+                        >
+                          {t('resetFilters')}
+                        </button>
+                      )}
+                   </div>
                    
-                   {/* Search Bar */}
-                   <div className="relative">
+                   <div className="relative mb-4 group">
                       <input 
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder={t('searchPlaceholder')}
-                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-brand-dark outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all"
+                        className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-brand-dark outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all shadow-inner"
                       />
-                      <svg className="absolute left-3 top-3 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400 group-focus-within:text-brand-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-3">
+                      {/* --- CATEGORY DROPDOWN MENU --- */}
+                      <div>
+                         <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('categories')}</label>
+                         <div className="relative">
+                            <select 
+                                value={filterCategory}
+                                onChange={(e) => setFilterCategory(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-100 border-none rounded-lg text-[10px] font-bold text-slate-600 outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/10 transition-all appearance-none pr-8"
+                            >
+                                <option value="all">{t('allCategories')}</option>
+                                {categories.map(cat => (
+                                   <option key={cat} value={cat}>{t(`cat_${cat}`)}</option>
+                                ))}
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                         </div>
+                      </div>
                       
-                      {/* Search Results Dropdown */}
-                      {filteredSearchResults.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-elevated border border-slate-100 max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden animate-slide-up">
-                           {filteredSearchResults.map(res => (
-                              <button 
-                                key={res.id}
-                                onClick={() => panToBusiness(res)}
-                                className="w-full text-start px-4 py-3 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50 last:border-0"
-                              >
-                                 <div className="w-6 h-6 rounded bg-brand-primary/10 flex items-center justify-center shrink-0">
-                                    <span className="text-[10px] font-bold text-brand-primary">{res.name.charAt(0)}</span>
-                                 </div>
-                                 <div className="overflow-hidden">
-                                    <p className="text-xs font-bold text-brand-dark truncate">{res.name}</p>
-                                    <p className="text-[9px] text-slate-400 truncate uppercase">{res.category}</p>
-                                 </div>
-                              </button>
-                           ))}
-                        </div>
-                      )}
+                      <div>
+                         <label className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 ml-1">{t('status')}</label>
+                         <div className="relative">
+                            <select 
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value as any)}
+                                className="w-full px-3 py-2 bg-slate-100 border-none rounded-lg text-[10px] font-bold text-slate-600 outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/10 transition-all appearance-none pr-8"
+                            >
+                                <option value="all">{t('allStatuses')}</option>
+                                <option value="occupied">{t('occupied')}</option>
+                                <option value="available">{t('available')}</option>
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                         </div>
+                      </div>
                    </div>
                </div>
                
-               {/* Actions Row */}
                <div className="flex gap-2 pointer-events-auto">
                   <button 
                       onClick={fetchRegionalInsights}
@@ -273,6 +312,8 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                     {businesses.map((business) => {
                         const colIndex = business.gridPosition.x - 1;
                         const rowIndex = business.gridPosition.y - 1;
+                        const isFilteredOut = !filteredBusinesses.some(f => f.id === business.id);
+
                         return (
                             <div key={business.id} className="absolute preserve-3d" style={{ 
                                 width: CELL_SIZE, height: CELL_SIZE, 
@@ -283,6 +324,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                                     business={business} 
                                     isHovered={hoveredId === business.id} 
                                     isSelected={selectedBusinessId === business.id} 
+                                    isFilteredOut={isFilteredOut}
                                     lod={currentLOD} 
                                     onSelect={(b: any) => { setSelectedBusinessId(b.id); setIsSidebarOpen(true); }} 
                                     onHover={setHoveredId} 
@@ -362,17 +404,6 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                <div className="p-8">
                    <p className="text-slate-600 mb-8 text-sm leading-relaxed font-medium">{selectedBusiness.description}</p>
                    
-                   {selectedBusiness.services && selectedBusiness.services.length > 0 && (
-                      <div className="mb-8">
-                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t('servicesOffered')}</h4>
-                         <div className="flex flex-wrap gap-2">
-                            {selectedBusiness.services.map((s, i) => (
-                               <span key={i} className="px-3 py-1 bg-blue-50 text-brand-primary rounded-lg text-[10px] font-bold border border-blue-100">{s}</span>
-                            ))}
-                         </div>
-                      </div>
-                   )}
-
                    <div className="space-y-4">
                        {selectedBusiness.isOccupied ? (
                           <div className="flex flex-col gap-3">
@@ -416,9 +447,6 @@ const OfficeMap: React.FC<OfficeMapProps> = ({ businesses, favorites, onToggleFa
                       className="w-48 h-48 mix-blend-multiply"
                    />
                 </div>
-                <p className="text-xs text-slate-500 font-medium leading-relaxed px-4">
-                   This unique digital ID allows instant mapping and interaction within the Digital District environment.
-                </p>
              </div>
           </div>
        )}

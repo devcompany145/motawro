@@ -4,7 +4,6 @@ import { getSystemInstruction } from '../constants';
 import { Business, BusinessGenome, MatchResult } from "../types";
 
 // Initialize Gemini Client
-// Fix: Use named parameter for apiKey as per guidelines
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
@@ -13,7 +12,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 export async function* streamBusinessAdvice(query: string, chatHistory: string[], language: string = 'ar') {
   try {
     const model = 'gemini-3-flash-preview';
-    // Fix: Using a plain string for contents for simple text tasks
     const prompt = `${getSystemInstruction(language)}\n\nHistory:\n${chatHistory.join('\n')}\n\nUser Question: ${query}`;
 
     const responseStream = await ai.models.generateContentStream({
@@ -25,7 +23,6 @@ export async function* streamBusinessAdvice(query: string, chatHistory: string[]
     });
 
     for await (const chunk of responseStream) {
-      // Fix: Access chunk.text property directly
       if (chunk.text) yield chunk.text;
     }
   } catch (error) {
@@ -36,7 +33,6 @@ export async function* streamBusinessAdvice(query: string, chatHistory: string[]
 
 /**
  * Generates a comprehensive, reasoned business strategy plan.
- * Uses Gemini 3 Pro for high-level reasoning with thinking budget.
  */
 export const generateStructuredStrategy = async (profile: any, language: string = 'ar'): Promise<string> => {
   try {
@@ -54,31 +50,56 @@ export const generateStructuredStrategy = async (profile: any, language: string 
       
       Requirements:
       1. Executive Vision: A bold, 2-sentence vision statement.
-      2. 12-Month Roadmap: Quarterly milestones (Q1-Q4) with specific KPIs for the services provided.
-      3. Ecosystem Synergy: How to leverage neighbors in the Digital District (Riyadh) based on the current service portfolio.
-      4. Risk & Mitigation: Top 3 strategic risks.
-      5. Resource Allocation: Budget and headcount suggestions.
-      
-      Output Format: High-quality Markdown with professional business headers.
-      Language: ${language === 'ar' ? 'Arabic' : 'English'}
+      2. 12-Month Roadmap: Quarterly milestones (Q1-Q4) with specific KPIs.
+      3. Ecosystem Synergy: How to leverage neighbors in Riyadh's Digital District.
+       Language: ${language === 'ar' ? 'Arabic' : 'English'}
     `;
 
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
       config: {
-        systemInstruction: "You are an elite management consultant from a top-tier firm. Your tone is authoritative, insightful, and strategic. Focus on scaling the specific services provided by the user.",
-        // Fix: Added appropriate thinkingBudget for gemini-3-pro-preview
+        systemInstruction: "You are an elite management consultant. Focus on scaling the specific services provided by the user.",
         thinkingConfig: { thinkingBudget: 16000 },
         temperature: 0.4,
       }
     });
 
-    // Fix: Access response.text property directly
     return response.text || "";
   } catch (error) {
-    console.error("Strategy Generation Error:", error);
+    console.error("Strategy Error:", error);
     return "Failed to construct strategy blueprint.";
+  }
+};
+
+/**
+ * Generates a high-level mentor recommendation summary based on genome and network.
+ */
+export const generateMentorInsight = async (userGenome: BusinessGenome, mentors: any[], language: string = 'ar'): Promise<string> => {
+  try {
+    const prompt = `
+      User Business Profile: ${JSON.stringify(userGenome)}
+      Available Mentors: ${JSON.stringify(mentors.map(m => ({ name: m.name, expertise: m.expertise, background: m.background })))}
+      
+      Task: Provide a 3-sentence high-level strategic recommendation. 
+      1. Identify the single best mentor for their current stage.
+      2. Mention a specific trend in the ${userGenome.industrySector} sector (relevant to KSA/GCC).
+      3. Explain the synergy.
+      Language: ${language === 'ar' ? 'Arabic' : 'English'}
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        systemInstruction: "You are the District AI Mentor Concierge. Your advice is brief, authoritative, and data-driven.",
+        temperature: 0.5,
+      }
+    });
+
+    return response.text || "";
+  } catch (error) {
+    return "Analyze your business genome to find the perfect mentor match.";
   }
 };
 
@@ -101,7 +122,8 @@ export const generateBusinessMatches = async (myProfile: BusinessGenome, availab
             type: Type.OBJECT,
             properties: {
               companyId: { type: Type.STRING },
-              score: { type: Number },
+              // Fix: Use Type.NUMBER instead of JS Number constructor
+              score: { type: Type.NUMBER },
               matchReason: { type: Type.STRING },
               sharedInterests: { type: Type.ARRAY, items: { type: Type.STRING } },
               collaborationOpportunity: { type: Type.STRING }
@@ -111,7 +133,6 @@ export const generateBusinessMatches = async (myProfile: BusinessGenome, availab
         }
       }
     });
-    // Fix: Access response.text property directly
     return JSON.parse(response.text || "[]") as MatchResult[];
   } catch (error) { return []; }
 };
@@ -129,37 +150,8 @@ export const getRegionalMapInsights = async (language: string = 'ar'): Promise<{
         toolConfig: { retrievalConfig: { latLng: { latitude: 24.7136, longitude: 46.6753 } } }
       },
     });
-    // Fix: Extract grounding metadata as per guidelines
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const links = groundingChunks.filter((chunk: any) => chunk.maps?.uri).map((chunk: any) => ({ title: chunk.maps.title, url: chunk.maps.uri }));
-    // Fix: Access response.text property directly
     return { text: response.text || "", links };
   } catch (error) { return { text: "Error", links: [] }; }
-};
-
-/**
- * Recommends a consulting service category with structured JSON.
- */
-export const recommendConsultingService = async (query: string, language: string = 'ar'): Promise<{recommendedId: string, reasoning: string}> => {
-  try {
-    const prompt = `Based on the query: "${query}", recommend the best consulting service category.`;
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { 
-        responseMimeType: "application/json",
-        // Fix: Added responseSchema for more robust JSON output
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            recommendedId: { type: Type.STRING, description: "ID of the recommended service category" },
-            reasoning: { type: Type.STRING, description: "Professional rationale for the recommendation" }
-          },
-          required: ["recommendedId", "reasoning"]
-        }
-      }
-    });
-    // Fix: Access response.text property directly
-    return JSON.parse(response.text || "{}");
-  } catch (error) { return { recommendedId: "", reasoning: "" }; }
 };

@@ -18,7 +18,6 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
 
-  // Handle initial date logic
   useEffect(() => {
     if (initialDate) {
       setSelectedDate(initialDate);
@@ -50,14 +49,13 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
     setBookingStep('confirm');
     setTimeout(() => {
         setBookingStep('success');
-    }, 1800);
+    }, 2200);
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-dark/95 backdrop-blur-2xl animate-fade-in overflow-y-auto">
       <div className="bg-white w-full max-w-2xl rounded-[48px] shadow-2xl overflow-hidden animate-scale-in border border-white/10 flex flex-col max-h-[90vh]">
         
-        {/* Modal Header */}
         <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
            <div className="flex items-center gap-5">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow-xl ${mentor.color}`}>
@@ -73,10 +71,23 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
            </button>
         </div>
 
-        {/* Modal Content */}
         <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
            
-           {/* Step 1: Calendar */}
+           <div className="flex gap-4 mb-10 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+              {['calendar', 'slots', 'success'].map((s, i) => (
+                 <div key={s} className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl transition-colors">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                       (s === 'calendar' && bookingStep === 'calendar') || (s === 'slots' && bookingStep === 'slots') || (s === 'success' && bookingStep === 'success')
+                       ? 'bg-brand-primary text-white' : 'bg-slate-200 text-slate-400'
+                    }`}>{i+1}</div>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${
+                       (s === 'calendar' && bookingStep === 'calendar') || (s === 'slots' && bookingStep === 'slots') || (s === 'success' && bookingStep === 'success')
+                       ? 'text-brand-dark' : 'text-slate-400'
+                    }`}>{t(s as any)}</span>
+                 </div>
+              ))}
+           </div>
+
            {bookingStep === 'calendar' && (
              <div className="animate-fade-in">
                 <div className="flex justify-between items-center mb-8">
@@ -123,7 +134,6 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
              </div>
            )}
 
-           {/* Step 2: Time Slots */}
            {bookingStep === 'slots' && (
              <div className="animate-slide-up space-y-10">
                 <div className="flex items-center gap-6 p-6 bg-brand-primary/5 rounded-3xl border border-brand-primary/10 mb-10 shadow-inner">
@@ -163,7 +173,6 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
              </div>
            )}
 
-           {/* Step 3: Confirming */}
            {bookingStep === 'confirm' && (
              <div className="py-20 flex flex-col items-center justify-center text-center">
                 <div className="relative w-24 h-24 mb-10">
@@ -172,11 +181,10 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
                    <div className="absolute inset-0 flex items-center justify-center text-2xl">⏳</div>
                 </div>
                 <h3 className="text-2xl font-black mb-3 text-brand-dark uppercase tracking-tight">Securing Mentor...</h3>
-                <p className="text-slate-500 font-medium text-lg">Synchronizing with Digital District scheduling protocols</p>
+                <p className="text-slate-500 font-medium text-lg">Synchronizing with District Scheduling protocols</p>
              </div>
            )}
 
-           {/* Step 4: Success */}
            {bookingStep === 'success' && (
              <div className="animate-scale-in text-center py-12 px-4">
                 <div className="w-24 h-24 bg-emerald-50 rounded-[32px] flex items-center justify-center mx-auto mb-10 text-emerald-500 shadow-inner relative">
@@ -211,7 +219,6 @@ const MentorBookingModal: React.FC<MentorBookingModalProps> = ({ mentor, onClose
            )}
         </div>
 
-        {/* Footer Actions */}
         {bookingStep !== 'confirm' && bookingStep !== 'success' && (
           <div className="p-10 border-t border-slate-100 bg-slate-50/80 flex gap-5 shrink-0">
              {bookingStep === 'slots' && (
