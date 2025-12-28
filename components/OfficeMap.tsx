@@ -32,35 +32,23 @@ interface OfficeMapProps {
 }
 
 const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredOut, lod, onSelect, onHover, t, mapMode }: any) => {
-  const isLowLod = lod === 'low';
   const isHighLod = lod === 'high';
   const isDarkMode = mapMode !== 'standard';
 
   const baseDepth = 40;
-  const hoverLift = isHovered ? (isLowLod ? 5 : 30) : 0; 
-
-  const getGlowColor = (colorClass: string) => {
-    if (!colorClass) return 'rgba(45, 137, 229, 0.25)';
-    if (colorClass.includes('cyan')) return 'rgba(6, 182, 212, 0.3)';
-    if (colorClass.includes('purple')) return 'rgba(168, 85, 247, 0.3)';
-    if (colorClass.includes('orange')) return 'rgba(249, 115, 22, 0.3)';
-    if (colorClass.includes('emerald')) return 'rgba(16, 185, 129, 0.3)';
-    return 'rgba(45, 137, 229, 0.25)';
-  };
-
-  const glowColor = getGlowColor(business.color);
+  // Calculate dynamic lift and scale for a premium feel
+  const liftAmount = isSelected ? 35 : isHovered ? 15 : 0;
   
   const roofStyle = {
     backgroundColor: business.isOccupied ? (isDarkMode ? '#1E293B' : '#0F172A') : '#FFFFFF',
     border: isSelected ? '4px solid #2D89E5' : isHovered ? '2px solid #2D89E5' : '1px solid rgba(0,0,0,0.1)',
     boxShadow: isSelected 
-      ? '0 0 30px rgba(45, 137, 229, 0.6)' 
+      ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' 
       : isHovered 
-        ? `0 0 20px ${glowColor}` 
+        ? '0 15px 30px -10px rgba(0, 0, 0, 0.3)' 
         : 'none',
-    transform: isSelected ? 'scale(1.05) translateZ(10px)' : 'scale(1)',
-    transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-    opacity: isFilteredOut ? 0.2 : 1
+    opacity: isFilteredOut ? 0.2 : 1,
+    transition: 'all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)'
   };
 
   return (
@@ -68,22 +56,31 @@ const BuildingBlock = React.memo(({ business, isHovered, isSelected, isFilteredO
       onClick={(e) => { if (!isFilteredOut) { e.stopPropagation(); onSelect(business); } }}
       onMouseEnter={() => !isFilteredOut && onHover(business.id)}
       onMouseLeave={() => onHover(null)}
-      className={`relative w-full h-full preserve-3d transition-all duration-300 ${isFilteredOut ? 'cursor-default grayscale pointer-events-none' : 'cursor-pointer'}`}
-      style={{ transform: `translateZ(${baseDepth + hoverLift}px)` }}
+      className={`relative w-full h-full preserve-3d transition-all duration-500 ease-out 
+        ${isFilteredOut ? 'cursor-default grayscale pointer-events-none' : 'cursor-pointer'}
+        ${isHovered ? 'scale-105' : 'scale-100'}
+        ${isSelected ? 'scale-110' : ''}
+      `}
+      style={{ transform: `translateZ(${baseDepth + liftAmount}px)` }}
     >
         {business.isOccupied ? (
-            <div className="absolute inset-0 rounded shadow-lg flex flex-col items-center justify-center p-2 text-center backface-hidden z-20" style={roofStyle}>
+            <div className="absolute inset-0 rounded flex flex-col items-center justify-center p-2 text-center backface-hidden z-20 transition-all duration-500" style={roofStyle}>
+                {/* Logo and Name Priority Display */}
                 {business.logoUrl && (isHighLod || isSelected) && (
-                  <div className="flex flex-col items-center justify-center w-full h-full overflow-hidden animate-fade-in">
-                    <img src={business.logoUrl} alt="" className="w-12 h-12 rounded mb-1 object-cover shadow-sm bg-white" />
-                    <span className="text-[10px] font-black text-white truncate w-full px-1 drop-shadow-md">{business.name}</span>
+                  <div className="flex flex-col items-center justify-center w-full h-full overflow-hidden animate-fade-in space-y-1.5">
+                    <div className="bg-white p-1 rounded-lg shadow-md border border-slate-100 shrink-0">
+                      <img src={business.logoUrl} alt="" className="w-10 h-10 object-contain rounded" />
+                    </div>
+                    <span className="text-[9px] font-black text-white truncate w-full px-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] uppercase tracking-tighter">
+                      {business.name}
+                    </span>
                   </div>
                 )}
-                {isSelected && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-primary text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-lg z-30">Active Unit</div>}
+                {isSelected && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-primary text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-lg z-30 ring-2 ring-white/20">Active Unit</div>}
             </div>
         ) : (
             <div className={`absolute inset-0 rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-white/20 transition-opacity ${isFilteredOut ? 'opacity-20' : 'opacity-100'}`} style={roofStyle}>
-                <span className="text-xl text-slate-300">+</span>
+                <span className="text-xl text-slate-300 transition-transform duration-500 group-hover:scale-125">+</span>
             </div>
         )}
     </div>
