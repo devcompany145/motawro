@@ -36,26 +36,55 @@ export const generateBusinessAdvice = async (query: string, chatHistory: string[
   }
 };
 
-// Analyzes business synergy and matches using structured JSON output
+/**
+ * Generates a comprehensive business strategy plan.
+ * Uses Gemini 3 Pro for high-level reasoning.
+ */
+export const generateStructuredStrategy = async (profile: any, language: string = 'ar'): Promise<string> => {
+  try {
+    const model = 'gemini-3-pro-preview';
+    const prompt = `
+      As a Senior Business Architect, create a professional strategy plan for:
+      BUSINESS CONTEXT: ${JSON.stringify(profile)}
+      
+      The plan must include:
+      1. Executive Summary
+      2. 12-Month Roadmap (divided into quarters)
+      3. SWOT Analysis (Detailed)
+      4. Digital Transformation Actions
+      5. Risk Mitigation Strategy
+      
+      Format the output in high-quality Markdown. 
+      Language: ${language === 'ar' ? 'Arabic' : 'English'}
+    `;
+
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are an elite business consultant. Your strategies are actionable, innovative, and data-driven.",
+        thinkingConfig: { thinkingBudget: 16000 },
+        temperature: 0.4, // Lower temperature for more structured, professional output
+      }
+    });
+
+    return response.text || "";
+  } catch (error) {
+    console.error("Strategy Generation Error:", error);
+    return "Failed to generate strategy. Please try again.";
+  }
+};
+
+// ... (Rest of existing matching and map grounding functions)
 export const generateBusinessMatches = async (myProfile: BusinessGenome, availableBusinesses: Business[], language: string = 'ar'): Promise<MatchResult[]> => {
   try {
     const model = 'gemini-3-flash-preview';
-    
     const candidates = availableBusinesses.map(b => ({
       id: b.id,
       name: b.name,
       genome: b.genomeProfile
     }));
-
-    const prompt = `
-      Analyze business synergy between:
-      USER: ${JSON.stringify(myProfile)}
-      CANDIDATES: ${JSON.stringify(candidates)}
-      
-      Return TOP 6 matches in JSON format.
-      Language: ${language}
-    `;
-
+    const prompt = `Analyze synergy between: USER: ${JSON.stringify(myProfile)} and CANDIDATES: ${JSON.stringify(candidates)}. Return top 6 matches in JSON. Language: ${language}`;
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
@@ -71,129 +100,60 @@ export const generateBusinessMatches = async (myProfile: BusinessGenome, availab
               matchReason: { type: Type.STRING },
               sharedInterests: { type: Type.ARRAY, items: { type: Type.STRING } },
               collaborationOpportunity: { type: Type.STRING },
-              analysisPoints: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    factor: { type: Type.STRING },
-                    description: { type: Type.STRING }
-                  }
-                }
-              }
+              analysisPoints: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { factor: { type: Type.STRING }, description: { type: Type.STRING } } } }
             },
             required: ['companyId', 'score', 'matchReason', 'collaborationOpportunity']
           }
         }
       }
     });
-
     return JSON.parse(response.text || "[]") as MatchResult[];
-  } catch (error) {
-    console.error("AI Matching Error:", error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
 
-/**
- * Uses Gemini 2.5 Maps Grounding to get real-world context for the district.
- */
 export const getRegionalMapInsights = async (language: string = 'ar'): Promise<{text: string, links: any[]}> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: "What are the major business hubs, government buildings, and networking spots near the Digital District in Riyadh (near coordinates 24.7136, 46.6753)? Provide a professional summary.",
+      contents: "What are the major business hubs near Riyadh Digital District? Provide a summary.",
       config: {
         tools: [{ googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: {
-              latitude: 24.7136,
-              longitude: 46.6753
-            }
-          }
-        }
+        toolConfig: { retrievalConfig: { latLng: { latitude: 24.7136, longitude: 46.6753 } } }
       },
     });
-
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const links = groundingChunks
-      .filter((chunk: any) => chunk.maps?.uri)
-      .map((chunk: any) => ({
-        title: chunk.maps.title,
-        url: chunk.maps.uri
-      }));
-
-    return {
-      text: response.text || "",
-      links: links
-    };
-  } catch (error) {
-    console.error("Maps Grounding Error:", error);
-    return { text: "Location insights currently unavailable.", links: [] };
-  }
+    const links = groundingChunks.filter((chunk: any) => chunk.maps?.uri).map((chunk: any) => ({ title: chunk.maps.title, url: chunk.maps.uri }));
+    return { text: response.text || "", links };
+  } catch (error) { return { text: "Error", links: [] }; }
 };
 
-// Performs a smart search across business data using Gemini
 export const searchBusinessesWithAI = async (query: string, businesses: Business[], language: string = 'ar'): Promise<any> => {
   try {
-    const simplifiedData = businesses.map(b => ({
-      id: b.id,
-      name: b.name,
-      category: b.category,
-      isOccupied: b.isOccupied
-    }));
-
-    const prompt = `Analyze search for: "${query}". Data: ${JSON.stringify(simplifiedData)}. Return JSON: {"ids": [], "filters": {"status": "all", "categories": []}}`;
+    const prompt = `Search analysis for: "${query}". Data: ${JSON.stringify(businesses)}. Return JSON: {"ids": [], "filters": {}}`;
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: { responseMimeType: 'application/json' }
     });
     return JSON.parse(response.text || "{}");
-  } catch (error) {
-    return { ids: [], filters: { status: 'all', categories: [] } };
-  }
+  } catch (error) { return { ids: [], filters: {} }; }
 };
 
-/**
- * Recommends a consulting service based on user needs using Gemini.
- * Fixes the compilation error in ConsultingPage.tsx
- */
 export const recommendConsultingService = async (query: string, language: string = 'ar'): Promise<{recommendedId: string, reasoning: string}> => {
   try {
-    const model = 'gemini-3-flash-preview';
-    const categories = [
-      { id: 'cons_tech', name: 'Technical Consulting' },
-      { id: 'cons_marketing', name: 'Digital Marketing' },
-      { id: 'cons_training', name: 'Training & Development' },
-      { id: 'cons_recruitment', name: 'Recruitment' },
-      { id: 'cons_gov', name: 'Government Relations' }
-    ];
-
-    const prompt = `
-      Based on the following business challenge/goal: "${query}", 
-      recommend the best consulting category from this list: ${JSON.stringify(categories)}.
-      Explain your reasoning briefly in ${language}.
-      Return the recommendation in JSON format.
-    `;
-
+    const prompt = `Recommend consulting for: "${query}". Return JSON: {"recommendedId": "", "reasoning": ""}`;
     const response = await ai.models.generateContent({
-      model: model,
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
-          properties: {
-            recommendedId: { 
-              type: Type.STRING,
-              description: 'The ID of the recommended category.'
-            },
-            reasoning: { 
-              type: Type.STRING,
-              description: 'Brief explanation for the recommendation in the user language.'
-            }
-          },
+          properties: { recommendedId: { type: Type.STRING }, reasoning: { type: Type.STRING } },
           required: ["recommendedId", "reasoning"]
         }
+      },
+    });
+    return JSON.parse(response.text || "{}");
+  } catch (error) { return { recommendedId: "", reasoning: "" }; }
+};
